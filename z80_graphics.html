@@ -1,0 +1,2212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixels & Attributes: A Programmer's Guide to ZX Spectrum Graphics — Part 1</title>
+<style>
+:root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --accent: #e94560;
+    --accent2: #533483;
+    --text: #e0e0e0;
+    --text-dim: #a0a0b0;
+    --code-bg: #0d1117;
+    --code-border: #30363d;
+    --link: #58a6ff;
+    --heading: #f0f0f0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+h1, h2, h3 { color: var(--heading); margin-top: 2.5rem; margin-bottom: 1rem; }
+h1 { font-size: 2rem; border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; }
+h2 { font-size: 1.5rem; border-bottom: 2px solid var(--accent2); padding-bottom: 0.3rem; }
+h3 { font-size: 1.2rem; color: var(--accent); }
+p { margin-bottom: 1rem; }
+.title-block {
+    text-align: center;
+    padding: 3rem 1rem;
+    margin-bottom: 2rem;
+    background: linear-gradient(135deg, var(--surface), var(--surface2));
+    border-radius: 12px;
+    border: 1px solid var(--accent2);
+}
+.title-block h1 { border: none; font-size: 2.5rem; margin-top: 0; }
+.title-block .subtitle { font-size: 1.2rem; color: var(--text-dim); margin-top: 0.5rem; }
+.title-block .assembler { font-size: 0.9rem; color: var(--accent); font-family: monospace; margin-top: 1rem; }
+nav#toc {
+    background: var(--surface);
+    border: 1px solid var(--code-border);
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 3rem;
+}
+nav#toc h2 { margin-top: 0; border-color: var(--accent); }
+nav#toc ul { list-style: none; padding-left: 0; }
+nav#toc > ul > li { margin-bottom: 0.4rem; }
+nav#toc ul ul { padding-left: 1.5rem; }
+nav#toc ul ul li { margin-bottom: 0.2rem; }
+nav#toc a { color: var(--link); text-decoration: none; }
+nav#toc a:hover { text-decoration: underline; }
+pre {
+    background: var(--code-bg);
+    border: 1px solid var(--code-border);
+    border-radius: 6px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    margin-bottom: 1.2rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+code {
+    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+    color: #7ee787;
+}
+pre code { color: #c9d1d9; }
+.comment { color: #8b949e; }
+.keyword { color: #ff7b72; }
+.label { color: #d2a8ff; }
+.string { color: #a5d6ff; }
+.number { color: #79c0ff; }
+.directive { color: #ffa657; }
+.bold-text { font-weight: 700; }
+a { color: var(--link); }
+.back-to-top {
+    display: inline-block;
+    margin-top: 0.3rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-decoration: none;
+}
+.back-to-top:hover { color: var(--link); }
+section { margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--code-border); }
+section:last-child { border-bottom: none; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+}
+th {
+    text-align: left;
+    padding: 0.5rem;
+    color: var(--heading);
+    border-bottom: 2px solid var(--accent);
+}
+td {
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--code-border);
+}
+tr.highlight-row {
+    background: var(--surface);
+}
+</style>
+</head>
+<body>
+
+<div class="title-block">
+<h1>Pixels &amp; Attributes</h1>
+<div class="subtitle">A Programmer's Guide to ZX Spectrum Graphics in Z80 Assembly</div>
+<div class="subtitle" style="color:var(--accent);font-weight:700;margin-top:0.5rem;">Part 1: Foundations</div>
+<div class="assembler">by Norbert of Norbsoft</div>
+<div class="assembler" style="margin-top:0.5rem;"><a href="z80_graphics_part2.html" style="color:var(--link);">Part 2: Advanced Topics &rarr;</a></div>
+</div>
+
+<nav id="toc">
+<h2>Contents</h2>
+<ul>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#1-display-memory">1. The Display File &amp; Memory Map</a></li>
+<ul>
+    <li><a href="#1-pixel-memory">Pixel Memory Layout</a></li>
+    <li><a href="#1-attribute-memory">Attribute Memory Layout</a></li>
+    <li><a href="#1-address-calculation">Calculating Screen Addresses</a></li>
+</ul>
+<li><a href="#2-attributes">2. Colours &amp; Attributes</a></li>
+<ul>
+    <li><a href="#2-attribute-byte">The Attribute Byte</a></li>
+    <li><a href="#2-ink-paper">Ink, Paper, Bright &amp; Flash</a></li>
+    <li><a href="#2-writing-attributes">Writing Attributes</a></li>
+</ul>
+<li><a href="#3-drawing-pixels">3. Drawing Pixels</a></li>
+<ul>
+    <li><a href="#3-setting-a-pixel">Setting a Single Pixel</a></li>
+    <li><a href="#3-clearing-a-pixel">Clearing a Single Pixel</a></li>
+    <li><a href="#3-toggling-a-pixel">Toggling a Pixel</a></li>
+</ul>
+<li><a href="#4-drawing-lines">4. Drawing Lines</a></li>
+<ul>
+    <li><a href="#4-horizontal-lines">Horizontal Lines</a></li>
+    <li><a href="#4-vertical-lines">Vertical Lines</a></li>
+    <li><a href="#4-bresenham">Bresenham's Line Algorithm</a></li>
+</ul>
+<li><a href="#5-drawing-shapes">5. Drawing Shapes</a></li>
+<ul>
+    <li><a href="#5-rectangles">Rectangles</a></li>
+    <li><a href="#5-circles">Circles</a></li>
+    <li><a href="#5-filling">Flood Fill</a></li>
+    <li><a href="#5-example-hollow-rect">Example: Hollow Rectangle</a></li>
+    <li><a href="#5-example-filled-rect">Example: Filled Rectangle</a></li>
+    <li><a href="#5-example-circle">Example: Circle</a></li>
+    <li><a href="#5-example-filled-circle">Example: Filled Circle</a></li>
+</ul>
+</ul>
+<li style="margin-top:0.6rem;"><a href="z80_graphics_part2.html" style="color:var(--accent);">Part 2: Advanced Topics &rarr;</a>
+<ul>
+    <li>6. Sprites</li>
+    <li>7. Scrolling</li>
+    <li>8. Character &amp; Text Graphics</li>
+    <li>9. Double Buffering &amp; Flicker-Free Animation</li>
+    <li>10. Graphics Optimisation</li>
+</ul>
+</li>
+</ul>
+</nav>
+
+<section id="introduction">
+<h1>Introduction</h1>
+<a href="#" class="back-to-top">^ Back to top</a>
+
+<p>This book is about making things appear on the ZX Spectrum screen — pixels, characters, sprites, scrolling backgrounds — using Z80 assembly language. By the time you reach the final chapter you will be able to draw and move sprites with transparency, scroll the screen smoothly, render text from a custom character set, and keep animation flicker-free. Every one of those techniques is built from the same two operations: writing pixel data to the right memory address, and writing colour data to a corresponding address in the attribute file.</p>
+
+<p>The book assumes you are comfortable with Z80 basics: registers, arithmetic instructions, jumps, and subroutine calls. If any of those feel uncertain, the companion introduction book covers them thoroughly. What this book adds is the Spectrum-specific knowledge — how the display hardware works, how its memory layout is organised, and how to exploit both efficiently in real graphics code.</p>
+
+<p>Chapter 1 lays the only foundation the rest of the book needs: how display memory is structured, and how to turn a pixel coordinate into the correct memory address. Everything else follows from that. Read it carefully, work through the examples by hand, and the address formula will feel like second nature within an hour.</p>
+</section>
+
+<section id="1-display-memory">
+<h1>1. The Display File &amp; Memory Map</h1>
+<a href="#toc" class="back-to-top">[Back to Contents]</a>
+
+<p>Before you can draw a single pixel, you need to understand the Spectrum's display memory. Unlike a modern framebuffer — where pixel (0,0) lives at the first byte and pixels follow in neat left-to-right, top-to-bottom order — the ZX Spectrum's display memory has a peculiar layout that surprises almost every programmer who meets it for the first time. Understanding it thoroughly is not optional: every graphics routine you will ever write depends on it.</p>
+
+<p>The Spectrum's display occupies two distinct areas of RAM. The first is the <strong>display file</strong>, which holds the raw pixel data. The second is the <strong>attribute file</strong>, which controls the colour of each 8&times;8 pixel block. Together they form the complete display system. Understanding both — and the reasons behind their organisation — makes every subsequent chapter straightforward.</p>
+
+<p>To make that concrete: suppose you want to draw a sprite that is 8 pixels tall and one byte (8 pixels) wide. The natural assumption — the one that works on most platforms — is that the display file is stored row by row: all of pixel row 0, then all of pixel row 1, and so on. Each row is 32 bytes wide (256 pixels &divide; 8 pixels per byte), so to move from one row of the sprite to the next you would add 32 to the address. You write your eight sprite bytes to <code>$4000</code>, <code>$4020</code>, <code>$4040</code>, <code>$4060</code>, <code>$4080</code>, <code>$40A0</code>, <code>$40C0</code>, <code>$40E0</code> and expect to see a solid block of eight pixel rows stacked on top of each other.</p>
+
+<p>What you actually get: <code>$4000</code> is pixel row 0, but <code>$4020</code> is pixel row 8. <code>$4040</code> is pixel row 16. <code>$4060</code> is pixel row 24. The eight addresses you chose do not map to eight consecutive rows — they map to rows 0, 8, 16, 24, 32, 40, 48 and 56, one eighth of the way down the screen apart. Your sprite appears as eight isolated single-pixel-tall strips with seven blank rows between each one, spread across most of the screen's height. The data is correct; the addresses are wrong.</p>
+
+<p>This is not a bug in your code's logic, only in your assumption about the memory layout. Understanding the actual layout — which has a clear structure of its own — is all it takes to fix it, and that is what this chapter explains.</p>
+
+<h2 id="1-pixel-memory">Pixel Memory Layout</h2>
+
+<p>The ZX Spectrum displays 256 pixels horizontally and 192 pixels vertically. Since each byte holds 8 pixels (one bit per pixel — 1 means ink colour, 0 means paper colour), the full screen requires 256 &times; 192 &divide; 8 = <strong>6,144 bytes</strong> of pixel data. This block of memory is called the <strong>display file</strong>, and it lives from address <code>$4000</code> (16384) to <code>$57FF</code> (22527).</p>
+
+<p>If the Spectrum stored pixels in simple row order — all 32 bytes of row 0, then all 32 bytes of row 1, and so on — calculating an address would be trivial: <code>$4000 + (y * 32) + (x / 8)</code>. But that is not what happens. The display file is organised to match the way the ULA (the Spectrum's display chip) scans video memory, and that organisation has a logic of its own. Once you see it, the address formula becomes easy to remember and easy to construct in Z80 code.</p>
+
+<h3>Three Thirds</h3>
+
+<p>The screen is divided vertically into three equal bands of 64 pixel rows each. Each band is called a <strong>third</strong>. Pixel rows 0&ndash;63 belong to the first third, rows 64&ndash;127 to the second, and rows 128&ndash;191 to the third. Each third occupies exactly 2,048 bytes ($800 hex), so the thirds are neatly separated in memory:</p>
+
+<pre><code><span class="comment">; ┌──────────────────────────────────────────┐  ← $4000  (16384)</span>
+<span class="comment">; │                                          │</span>
+<span class="comment">; │         FIRST THIRD   (rows   0–63)      │  2048 bytes</span>
+<span class="comment">; │                                          │</span>
+<span class="comment">; ├──────────────────────────────────────────┤  ← $4800  (18432)</span>
+<span class="comment">; │                                          │</span>
+<span class="comment">; │         SECOND THIRD  (rows  64–127)     │  2048 bytes</span>
+<span class="comment">; │                                          │</span>
+<span class="comment">; ├──────────────────────────────────────────┤  ← $5000  (20480)</span>
+<span class="comment">; │                                          │</span>
+<span class="comment">; │         THIRD THIRD   (rows 128–191)     │  2048 bytes</span>
+<span class="comment">; │                                          │</span>
+<span class="comment">; └──────────────────────────────────────────┘  ← $5800  (22528)  ← attribute file begins here</span></code></pre>
+
+<p>To find which third a pixel row belongs to, divide y by 64: <code>third = y / 64</code>. The base address of that third is then <code>$4000 + (third * $800)</code>.</p>
+
+<h3>Inside a Third</h3>
+
+<p>Before going further, three terms need precise definitions.</p>
+
+<p>A <strong>pixel row</strong> is a single horizontal line of pixels stretching across the full 256-pixel width of the screen, one pixel tall. The y coordinate selects which pixel row you are on. There are 192 of them, numbered 0 at the top to 191 at the bottom.</p>
+
+<p>A <strong>character row</strong> is a horizontal band of 8 pixel rows stacked vertically, the same height as one text character on screen. The Spectrum's character set uses 8&times;8 pixel cells, so the screen naturally divides into 24 character rows (192 &divide; 8). Character row 0 contains pixel rows 0–7, character row 1 contains pixel rows 8–15, character row 2 contains pixel rows 16–23, and so on.</p>
+
+<p>A <strong>scan line</strong> is the position of a pixel row within its character row, numbered 0–7 from the top of the character row. It is a local index, not a global one. Pixel row 19 sits in character row 2 (rows 16–23) at position 3 within that band, so its scan line is 3. The formula is: <code>scan line = y AND 7</code>, <code>character row = y / 8</code>. These are the LLL and RRR fields from the TTRRRLL breakdown introduced later in this chapter.</p>
+
+<p>With those definitions in place: within each third, you might expect the 64 pixel rows to be stored in plain order — pixel row 0 first, then pixel row 1, down to pixel row 63. They are not. Each third contains 8 character rows stacked vertically, and each character row is 8 scan lines tall. The display file does not store them character-row by character-row; it groups by scan line number instead, collecting scan line 0 from every character row before moving on to scan line 1.</p>
+
+<p>The ordering is: first, store scan line 0 of every character row (pixel rows 0, 8, 16, 24, 32, 40, 48, 56); then scan line 1 of every character row (pixel rows 1, 9, 17, 25...); then scan line 2; and so on to scan line 7. The scan line number advances slowly; the character row advances quickly:</p>
+
+<pre><code><span class="comment">; Layout inside the first third ($4000–$47FF):</span>
+<span class="comment">;</span>
+<span class="comment">;  $4000 ← scan line 0 of char row 0  (pixel row  0)</span>
+<span class="comment">;  $4020 ← scan line 0 of char row 1  (pixel row  8)</span>
+<span class="comment">;  $4040 ← scan line 0 of char row 2  (pixel row 16)</span>
+<span class="comment">;  $4060 ← scan line 0 of char row 3  (pixel row 24)</span>
+<span class="comment">;  $4080 ← scan line 0 of char row 4  (pixel row 32)</span>
+<span class="comment">;  $40A0 ← scan line 0 of char row 5  (pixel row 40)</span>
+<span class="comment">;  $40C0 ← scan line 0 of char row 6  (pixel row 48)</span>
+<span class="comment">;  $40E0 ← scan line 0 of char row 7  (pixel row 56)</span>
+<span class="comment">;  ---</span>
+<span class="comment">;  $4100 ← scan line 1 of char row 0  (pixel row  1)</span>
+<span class="comment">;  $4120 ← scan line 1 of char row 1  (pixel row  9)</span>
+<span class="comment">;  ...etc...</span>
+<span class="comment">;  ---</span>
+<span class="comment">;  $4700 ← scan line 7 of char row 0  (pixel row  7)</span>
+<span class="comment">;  $4720 ← scan line 7 of char row 1  (pixel row 15)</span>
+<span class="comment">;  ...etc...</span>
+<span class="comment">;  $47E0 ← scan line 7 of char row 7  (pixel row 63)</span></code></pre>
+
+<p>The same information as a grid makes the pattern immediately visible. Each cell shows the memory address and, in brackets, the global pixel row that address holds. Moving one column right (to the next character row) adds <code>$20</code> to the address. Moving one row down (to the next scan line) adds <code>$100</code>:</p>
+
+<table>
+<tr><th></th><th>Char row 0</th><th>Char row 1</th><th>Char row 2</th><th>…</th><th>Char row 7</th></tr>
+<tr><td><strong>Scan line 0</strong></td><td>$4000 (pixel row 0)</td><td>$4020 (pixel row 8)</td><td>$4040 (pixel row 16)</td><td>…</td><td>$40E0 (pixel row 56)</td></tr>
+<tr class="highlight-row"><td><strong>Scan line 1</strong></td><td>$4100 (pixel row 1)</td><td>$4120 (pixel row 9)</td><td>$4140 (pixel row 17)</td><td>…</td><td>$41E0 (pixel row 57)</td></tr>
+<tr><td><strong>Scan line 2</strong></td><td>$4200 (pixel row 2)</td><td>$4220 (pixel row 10)</td><td>$4240 (pixel row 18)</td><td>…</td><td>$42E0 (pixel row 58)</td></tr>
+<tr class="highlight-row"><td><strong>…</strong></td><td>…</td><td>…</td><td>…</td><td>…</td><td>…</td></tr>
+<tr><td><strong>Scan line 7</strong></td><td>$4700 (pixel row 7)</td><td>$4720 (pixel row 15)</td><td>$4740 (pixel row 23)</td><td>…</td><td>$47E0 (pixel row 63)</td></tr>
+</table>
+
+<p>Notice that pixel rows 0, 8, 16, 24, 32, 40, 48 and 56 are stored consecutively at $4000, $4020, $4040... only after all eight character rows have had their first scan line stored does the layout move on to scan line 1 at $4100. This is the opposite of what most programmers expect — but it is how the ULA reads memory, and it is what makes hardware character rendering efficient and inexpensive. When the ULA finishes drawing one scan line across the screen and needs to move to the next, it simply adds $100 to the address. No recalculation is needed: the new address automatically points to the correct scan line of the same set of character rows.</p>
+
+<p>The practical consequence is that if you try to draw a sprite by writing consecutive bytes from the same address onward, the image will look scrambled. You must calculate the correct address for each row separately. That is what the routines in this chapter do.</p>
+
+<h3>Decoding y into Three Fields</h3>
+
+<p>Any pixel row <code>y</code> in the range 0&ndash;191 can be split into three fields by looking at its 8 bits directly. The naming <strong>TTRRRLLL</strong> is a useful mnemonic — each letter stands for the field it represents: <strong>T</strong> for <strong>T</strong>hird, <strong>R</strong> for character <strong>R</strong>ow, <strong>L</strong> for scan <strong>L</strong>ine:</p>
+
+<pre><code><span class="comment">; y  as 8 bits:   T T R R R L L L</span>
+<span class="comment">;                 ↑ ↑ ↑ ↑ ↑ ↑ ↑ ↑</span>
+<span class="comment">;               bit 7   bit 5   bit 2   bit 0</span>
+<span class="comment">;</span>
+<span class="comment">;  TT  = bits 7–6  →  which third          (0, 1, or 2)</span>
+<span class="comment">;  RRR = bits 5–3  →  character row within the third  (0–7)</span>
+<span class="comment">;  LLL = bits 2–0  →  scan line within the character row  (0–7)</span></code></pre>
+
+<p>For example, pixel row 73:</p>
+
+<pre><code><span class="comment">; y = 73  →  binary: 0 1 0 0 1 0 0 1</span>
+<span class="comment">;                    T T R R R L L L</span>
+<span class="comment">;</span>
+<span class="comment">;  TT  = 01  →  second third  (base $4800)</span>
+<span class="comment">;  RRR = 001  →  character row 1  within that third</span>
+<span class="comment">;  LLL = 001  →  scan line 1  within that character row</span>
+<span class="comment">;</span>
+<span class="comment">;  Pixel row 73 = scan line 1 of character row 9  (= 8 + 1)</span></code></pre>
+
+<p>Working through a few more values makes the pattern obvious. Any y value in the range 0–191 splits cleanly into three non-overlapping fields:</p>
+
+<table>
+<tr><th>y</th><th>Binary</th><th>TT (third)</th><th>RRR (char row)</th><th>LLL (scan line)</th><th>Meaning</th></tr>
+<tr><td>0</td><td>00 000 000</td><td>00</td><td>000</td><td>000</td><td>First third, char row 0, scan line 0 — very top of screen</td></tr>
+<tr class="highlight-row"><td>8</td><td>00 001 000</td><td>00</td><td>001</td><td>000</td><td>First third, char row 1, scan line 0 — second character row begins</td></tr>
+<tr><td>10</td><td>00 001 010</td><td>00</td><td>001</td><td>010</td><td>First third, char row 1, scan line 2</td></tr>
+<tr class="highlight-row"><td>64</td><td>01 000 000</td><td>01</td><td>000</td><td>000</td><td>Second third begins — TT flips to 01</td></tr>
+<tr><td>73</td><td>01 001 001</td><td>01</td><td>001</td><td>001</td><td>Second third, char row 1, scan line 1</td></tr>
+<tr class="highlight-row"><td>191</td><td>10 111 111</td><td>10</td><td>111</td><td>111</td><td>Third third, char row 7, scan line 7 — very bottom of screen</td></tr>
+</table>
+
+<p>Notice that incrementing y by 1 always increments LLL by 1 — until LLL wraps at 7, at which point RRR increments instead. This is exactly the same as counting in binary with the bits grouped as 2+3+3. The address formula exploits this directly: each field slots into a fixed position in the 16-bit address with no arithmetic needed, only bit manipulation.</p>
+
+<h3>The Full Address Formula</h3>
+
+<p>Two more terms before the formula.</p>
+
+<p>A <strong>16-bit address</strong> on the Z80 is made up of two 8-bit bytes. The <strong>high byte</strong> holds the upper eight bits (bits 15–8) and the <strong>low byte</strong> holds the lower eight bits (bits 7–0). When you write <code>LD HL, $4920</code>, H is the high byte ($49) and L is the low byte ($20). The display file address formula builds H and L separately, then combines them.</p>
+
+<p>A <strong>column</strong> is the horizontal byte position along a pixel row — how far along the x-axis a byte sits, not how far down the screen. Each pixel row is 256 pixels wide and each byte holds 8 pixels, so each row is 32 bytes wide. Those 32 bytes are columns 0–31, increasing from left to right. The column number for a given x coordinate is simply <code>x / 8</code> — the same division that strips the three low bits identifying the pixel within its byte. Column 0 covers pixels 0–7, column 1 covers pixels 8–15, column 31 covers pixels 248–255.</p>
+
+<p>With those in place: the display file address is assembled by placing the three y fields and the column into specific bit positions in the high and low bytes. Each field plugs directly into a dedicated slot with no multiplication needed:</p>
+
+<pre><code><span class="comment">; 16-bit address:</span>
+<span class="comment">;</span>
+<span class="comment">;  High byte:  0  1  0  T1 T0 L2 L1 L0</span>
+<span class="comment">;  Low  byte: R2 R1 R0 C4 C3 C2 C1 C0</span>
+<span class="comment">;</span>
+<span class="comment">;  T1 T0  =  bits 7–6 of y  (which third)</span>
+<span class="comment">;  L2 L1 L0  =  bits 2–0 of y  (scan line)</span>
+<span class="comment">;  R2 R1 R0  =  bits 5–3 of y  (character row within third)</span>
+<span class="comment">;  C4..C0  =  bits 7–3 of x  (column byte = x / 8,  range 0–31)</span></code></pre>
+
+<p>The <code>010</code> at the top of the high byte locks the address into the display file range. The third (TT) occupies the next two bits — each step of TT adds $800 to the address. The scan line (LLL) follows in the high byte's lower three bits — each step adds $100. The character row (RRR) leads the low byte — each step adds $20 (32 bytes, one byte per column). The column (CCCCC) fills the low byte's remaining five bits.</p>
+
+<p>Let's verify with pixel row 73, column 10 (x = 80):</p>
+
+<pre><code><span class="comment">; y = 73 = %01001001   →   TT=01  RRR=001  LLL=001</span>
+<span class="comment">; x = 80              →   column byte = 80 / 8 = 10  =  %01010  →  C4..C0 = 01010</span>
+<span class="comment">;</span>
+<span class="comment">;  High byte: 0 1 0 0 1 0 0 1  =  $49</span>
+<span class="comment">;  Low  byte: 0 0 1 0 1 0 1 0  =  $2A</span>
+<span class="comment">;</span>
+<span class="comment">;  Address = $492A</span>
+<span class="comment">;</span>
+<span class="comment">; Cross-check:  second third base $4800</span>
+<span class="comment">;             + scan line 1  → +$100  =  $4900</span>
+<span class="comment">;             + char row 1   → +$020  =  $4920</span>
+<span class="comment">;             + column 10    → +$00A  =  $492A  ✓</span></code></pre>
+
+<h2 id="1-attribute-memory">Attribute Memory Layout</h2>
+
+<p>The attribute file begins immediately after the display file, at address <code>$5800</code> (22528), and occupies <strong>768 bytes</strong> through to <code>$5AFF</code> (23295). There is one attribute byte for every 8&times;8 block of pixels on screen — 32 columns of blocks across and 24 rows of blocks down = 768 blocks in total, one byte each. Each block is called a <strong>character cell</strong>; Chapter 2 explains the term and the full attribute byte format in detail.</p>
+
+<p>Unlike the display file, the attribute file is perfectly linear. The attribute bytes are laid out in simple row order: all 32 bytes of character row 0 first, then character row 1, and so on. The address of the attribute byte for the character cell containing pixel (x, y) is:</p>
+
+<pre><code><span class="comment">; attr_address = $5800 + (cy * 32) + cx</span>
+<span class="comment">;</span>
+<span class="comment">;   cy = y / 8   (pixel row → character row, 0–23)</span>
+<span class="comment">;   cx = x / 8   (pixel col → character col, 0–31)</span>
+<span class="comment">;</span>
+<span class="comment">; Examples:</span>
+<span class="comment">;   Top-left cell    cy=0,  cx=0  →  $5800 + 0   + 0   =  $5800</span>
+<span class="comment">;   Top-right cell   cy=0,  cx=31 →  $5800 + 0   + 31  =  $581F</span>
+<span class="comment">;   Second row       cy=1,  cx=0  →  $5800 + 32  + 0   =  $5820</span>
+<span class="comment">;   Bottom-right     cy=23, cx=31 →  $5800 + 736 + 31  =  $5AFF</span></code></pre>
+
+<p>One attribute byte controls the colour of all 64 pixels in its cell — every pixel in that 8&times;8 block shares the same ink and paper colour. This 8&times;8 granularity is the most distinctive constraint of Spectrum graphics programming: you can never colour a single pixel independently; you always colour the entire cell it belongs to. The attribute byte format — ink, paper, BRIGHT and FLASH — is covered in full in Chapter 2. For now, the crucial point is the layout: display file is quirky, attribute file is simple.</p>
+
+<h2 id="1-address-calculation">Calculating Screen Addresses</h2>
+
+<p>Now we turn the address formula into working Z80 code. The two routines below accept a pixel coordinate — y in register B, x in register C — and return either a display file address or an attribute address in HL. These are the building blocks every subsequent chapter depends on, so it is worth reading them carefully and understanding each step.</p>
+
+<h3>calc_pixel_addr: Display File Address</h3>
+
+<p>The routine returns the address in the <strong>HL register pair</strong>. H stands for High and L stands for Low. HL is two 8-bit registers used together as a single 16-bit value: H holds the <strong>high byte</strong> — the upper eight bits, bits 15–8 — and L holds the <strong>low byte</strong> — the lower eight bits, bits 7–0. When the routine finishes, HL contains the complete 16-bit address. The reason for building H and L separately is that the address formula splits cleanly at the byte boundary: the third (TT) and scan line (LLL) fields belong entirely in H, and the character row (RRR) and column (CCCCC) fields belong entirely in L. No field crosses from one byte to the other.</p>
+
+<p>The routine also uses <strong>RRCA</strong> — Rotate Right Circular the Accumulator. RRCA shifts every bit in A one position to the right, and the bit that would fall off the right end (bit 0) wraps around to the left end (bit 7) instead of being lost:</p>
+
+<pre><code><span class="comment">; RRCA on %10110000:</span>
+<span class="comment">;   before:  1 0 1 1 0 0 0 0</span>
+<span class="comment">;   after:   0 1 0 1 1 0 0 0   ← each bit moved right one place; bit 0 (0) wrapped to bit 7</span>
+<span class="comment">;</span>
+<span class="comment">; RRCA on %00000001:</span>
+<span class="comment">;   before:  0 0 0 0 0 0 0 1</span>
+<span class="comment">;   after:   1 0 0 0 0 0 0 0   ← bit 0 (1) wrapped to bit 7</span></code></pre>
+
+<p>This wrapping is why an AND instruction always appears before a sequence of RRCAs in this routine. If we rotated the raw value of y, bits from the low end would wrap into the high end and corrupt the result. AND first zeroes out all bits except the ones we want to move, so the wrapped bit is always 0 and harmless.</p>
+
+<p>The header block below shows the routine's inputs, output, and register side effects. <strong>Destroys: B</strong> means that B does not hold its original value when the routine returns — it is overwritten as part of the calculation. Any value you needed from B must be saved before calling the routine.</p>
+
+<pre><code><span class="comment">; calc_pixel_addr</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">; Output: HL = display file address of the byte containing the pixel</span>
+<span class="comment">;          A = bitmask for that pixel  (bit 7 = leftmost)</span>
+<span class="comment">; Destroys: B</span></code></pre>
+
+<p><strong>Stage 1 — Build the high byte</strong></p>
+
+<p>The high byte we need has the bit pattern <code>010 TT LLL</code>. The fixed <code>010</code> at the top three bits ensures the address falls in the range $4000–$5FFF, which is where the display file lives. TT (bits 7–6 of y) sits at bit positions 4–3, contributing $000, $800, or $1000 to the address — selecting which third. LLL (bits 2–0 of y) sits at bit positions 2–0, contributing 0–7 × $100 — selecting which scan line within the character row.</p>
+
+<p>TT starts at bits 7–6 of y and needs to move to bits 4–3 of H: three positions to the right. LLL starts at bits 2–0 of y and needs to stay at bits 2–0 of H: no movement needed. We extract and place each one separately, then OR them together.</p>
+
+<pre><code><span class="label">calc_pixel_addr</span>:
+    <span class="comment">; Extract TT: bits 7–6 of y → rotate right 3 → land at positions 4–3</span>
+    <span class="keyword">LD</span>  A, B             <span class="comment">; A = y</span>
+    <span class="keyword">AND</span> <span class="number">%11000000</span>        <span class="comment">; A = TT000000  (isolate bits 7–6)</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; A = 0TT00000</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; A = 00TT0000</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; A = 000TT000  (TT now in positions 4–3)</span>
+    <span class="keyword">OR</span>  <span class="number">%01000000</span>        <span class="comment">; A = 010TT000  (set bit 6: the fixed $40 base)</span>
+    <span class="keyword">LD</span>  H, A             <span class="comment">; save — H holds 010TT000, LLL still missing</span>
+
+    <span class="comment">; Extract LLL: bits 2–0 of y → already at positions 2–0, slot straight in</span>
+    <span class="keyword">LD</span>  A, B             <span class="comment">; A = y</span>
+    <span class="keyword">AND</span> <span class="number">%00000111</span>        <span class="comment">; A = 00000LLL</span>
+    <span class="keyword">OR</span>  H                <span class="comment">; A = 010TTLLL</span>
+    <span class="keyword">LD</span>  H, A             <span class="comment">; H is complete</span></code></pre>
+
+<p><strong>Stage 2 — Build the low byte</strong></p>
+
+<p>The low byte has the pattern <code>RRR CCCCC</code>. RRR (bits 5–3 of y) sits at positions 7–5, contributing 0–7 × $20 — selecting which character row. CCCCC (the column, x &divide; 8) sits at positions 4–0, contributing 0–31 — selecting which byte along the row.</p>
+
+<p>RRR starts at bits 5–3 of y and needs to move to bits 7–5 of L: two positions to the left. This uses <strong>RLCA</strong> — Rotate Left Circular the Accumulator — which works exactly like RRCA but in the opposite direction: every bit shifts one place left, and the bit that would fall off the left end (bit 7) wraps around to the right end (bit 0):</p>
+
+<pre><code><span class="comment">; RLCA on %00111000:  (RRR = 111 — character row 7)</span>
+<span class="comment">;   before:  0 0 1 1 1 0 0 0</span>
+<span class="comment">;   after:   0 1 1 1 0 0 0 0   ← each bit moved left one place; bit 7 (0) wrapped to bit 0</span>
+<span class="comment">;</span>
+<span class="comment">; RLCA again:</span>
+<span class="comment">;   before:  0 1 1 1 0 0 0 0</span>
+<span class="comment">;   after:   1 1 1 0 0 0 0 0   ← RRR now occupies bits 7–5</span></code></pre>
+
+<p>The AND before the RLCAs serves the same purpose as in Stage 1: it zeroes the bits we do not want, so the wrapped bit is always 0 and harmless. The column calculation uses three RRCAs (rightward shift) with AND cleaning up the bits that wrapped in from the right — exactly as described above for Stage 1.</p>
+
+<pre><code>    <span class="comment">; Extract RRR: bits 5–3 of y → rotate left 2 → land at positions 7–5</span>
+    <span class="keyword">LD</span>  A, B             <span class="comment">; A = y</span>
+    <span class="keyword">AND</span> <span class="number">%00111000</span>        <span class="comment">; A = 00RRR000  (isolate bits 5–3)</span>
+    <span class="keyword">RLCA</span>                 <span class="comment">; A = 0RRR0000</span>
+    <span class="keyword">RLCA</span>                 <span class="comment">; A = RRR00000  (RRR now in positions 7–5)</span>
+    <span class="keyword">LD</span>  L, A             <span class="comment">; L = RRR00000</span>
+
+    <span class="comment">; Extract CCCCC: bits 7–3 of x → rotate right 3 → land at positions 4–0</span>
+    <span class="comment">; RRCA rotates, so low bits wrap into the top — AND clears them.</span>
+    <span class="keyword">LD</span>  A, C             <span class="comment">; A = x</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }  divide x by 8</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">AND</span> <span class="number">%00011111</span>        <span class="comment">; A = 000CCCCC  (mask off the rotated-in bits)</span>
+    <span class="keyword">OR</span>  L                <span class="comment">; A = RRRCCCCC</span>
+    <span class="keyword">LD</span>  L, A             <span class="comment">; L is complete</span></code></pre>
+
+<p><strong>Stage 3 — Calculate the bitmask</strong></p>
+
+<p>Each byte in the display file holds 8 pixels, one per bit. To set, clear, or read a single pixel you need to know <em>which bit</em> within its byte represents that pixel. A <strong>bitmask</strong> is a byte with exactly one bit set — a 1 in the position of the target pixel and 0s everywhere else. You then use that mask with a logical operation to affect only the target pixel while leaving the other seven bits untouched: OR with the mask to set the pixel, AND with the inverted mask to clear it, XOR with the mask to toggle it.</p>
+
+<p>On the Spectrum, bit 7 of a display byte is the leftmost pixel in that byte and bit 0 is the rightmost. A pixel at x coordinate 0 is at bit 7 of column 0; a pixel at x coordinate 7 is at bit 0 of column 0; a pixel at x coordinate 8 is at bit 7 of column 1. The bit position within the byte is always <code>x AND 7</code> — the three low bits of x. So for x=0 the mask is <code>%10000000</code>, for x=1 it is <code>%01000000</code>, for x=7 it is <code>%00000001</code>, for x=8 it is <code>%10000000</code> again (new byte, back to bit 7).</p>
+
+<p>The stage calculates that mask: start with <code>%10000000</code> (bit 7, the leftmost position) and rotate it right <code>x AND 7</code> times to move the set bit to the correct position.</p>
+
+<pre><code>    <span class="keyword">LD</span>  A, C             <span class="comment">; A = x</span>
+    <span class="keyword">AND</span> <span class="number">%00000111</span>        <span class="comment">; A = pixel's position within its byte (0–7). Also sets the Zero flag if result is 0.</span>
+    <span class="keyword">LD</span>  B, A             <span class="comment">; B = shift count  (LD never affects flags, so Zero flag is still set from AND)</span>
+    <span class="keyword">LD</span>  A, <span class="number">%10000000</span>     <span class="comment">; A = leftmost pixel mask  (LD never affects flags)</span>
+    <span class="keyword">JR</span>  Z, .mask_done    <span class="comment">; Zero flag still set from AND — if shift count was 0, mask is already correct</span>
+<span class="label">.mask_shift</span>:
+    <span class="keyword">RRCA</span>                 <span class="comment">; move mask one position right</span>
+    <span class="keyword">DJNZ</span> .mask_shift     <span class="comment">; Decrement B and Jump if Not Zero — loops B times then falls through</span>
+<span class="label">.mask_done</span>:
+    <span class="keyword">RET</span></code></pre>
+
+<p>Here is a complete trace for pixel (x=20, y=10), working through all three stages:</p>
+
+<pre><code><span class="comment">; y = 10 = %00001010</span>
+<span class="comment">;           T T R R R L L L</span>
+<span class="comment">;           0 0 0 0 1 0 1 0</span>
+<span class="comment">;</span>
+<span class="comment">;   TT  = 00  →  first third  (base $4000)</span>
+<span class="comment">;   RRR = 001  →  character row 1</span>
+<span class="comment">;   LLL = 010  →  scan line 2</span>
+<span class="comment">;</span>
+<span class="comment">; Stage 1 — high byte:</span>
+<span class="comment">;   %00001010 AND %11000000 = %00000000   (TT = 00)</span>
+<span class="comment">;   RRCA ×3  →  %00000000</span>
+<span class="comment">;   OR %01000000  →  %01000000   (H so far = $40)</span>
+<span class="comment">;   %00001010 AND %00000111 = %00000010   (LLL = scan line 2)</span>
+<span class="comment">;   OR %01000000  →  %01000010</span>
+<span class="comment">;   H = $42</span>
+<span class="comment">;</span>
+<span class="comment">; Stage 2 — low byte:</span>
+<span class="comment">;   %00001010 AND %00111000 = %00001000   (char row 1 in bits 5–3)</span>
+<span class="comment">;   RLCA ×2  →  %00100000   (char row now in bits 7–5)</span>
+<span class="comment">;   L = $20</span>
+<span class="comment">;   x = 20 = %00010100</span>
+<span class="comment">;   RRCA ×3  →  %10000010   (bit 0 of x rotated into bit 7)</span>
+<span class="comment">;   AND %00011111  →  %00000010   (column = 20/8 = 2)</span>
+<span class="comment">;   OR %00100000  →  %00100010</span>
+<span class="comment">;   L = $22</span>
+<span class="comment">;</span>
+<span class="comment">; HL = $4222</span>
+<span class="comment">;</span>
+<span class="comment">; Cross-check:  first third $4000</span>
+<span class="comment">;             + scan line 2  → +$200  =  $4200</span>
+<span class="comment">;             + char row 1   → +$020  =  $4220</span>
+<span class="comment">;             + column 2     → +$002  =  $4222  ✓</span>
+<span class="comment">;</span>
+<span class="comment">; Stage 3 — bitmask:</span>
+<span class="comment">;   x AND 7 = 20 AND 7 = 4  →  %10000000 rotated right 4  →  %00001000</span></code></pre>
+
+<h3>calc_attr_addr: Attribute File Address</h3>
+
+<p>The attribute address is simpler because the attribute file is stored linearly. We convert the pixel coordinates to character cell coordinates, then compute <code>$5800 + (cy * 32) + cx</code>. Multiplying by 32 is done with five consecutive <code>ADD HL, HL</code> instructions. Each one computes HL = HL + HL = 2 × HL, so five doublings multiply the original value by 2⁵ = 32.</p>
+
+<pre><code><span class="comment">; calc_attr_addr</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">; Output: HL = attribute byte address</span>
+<span class="comment">; Destroys: A, DE</span>
+<span class="label">calc_attr_addr</span>:
+    <span class="comment">; Convert y to character row (cy = y / 8) by shifting right 3</span>
+    <span class="keyword">LD</span>  A, B             <span class="comment">; A = y</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }  divide by 8</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }  A = character row (0–23), with 3 rotated-in bits</span>
+    <span class="keyword">AND</span> <span class="number">%00011111</span>        <span class="comment">; A = cy  (masks away the rotated-in bits)</span>
+
+    <span class="comment">; Multiply character row by 32 to get byte offset of this row</span>
+    <span class="keyword">LD</span>  H, 0
+    <span class="keyword">LD</span>  L, A             <span class="comment">; HL = cy  (0–23)</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy *  2</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy *  4</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy *  8</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy * 16</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy * 32  (byte offset to this character row)</span>
+
+    <span class="comment">; Add the column: cx = x / 8</span>
+    <span class="keyword">LD</span>  A, C             <span class="comment">; A = x</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }  divide by 8</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">AND</span> <span class="number">%00011111</span>        <span class="comment">; A = cx  (0–31)</span>
+    <span class="keyword">ADD</span> A, L             <span class="comment">; add column to row offset (safe: L ≤ $E0, cx ≤ $1F, sum ≤ $FF — no 8-bit overflow)</span>
+    <span class="keyword">LD</span>  L, A             <span class="comment">; HL = cy*32 + cx  (offset within attribute area)</span>
+
+    <span class="comment">; Add the attribute file base address</span>
+    <span class="keyword">LD</span>  DE, <span class="number">$5800</span>        <span class="comment">; DE = attribute base</span>
+    <span class="keyword">ADD</span> HL, DE           <span class="comment">; HL = final attribute address</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>These two routines are the engine beneath every drawing operation in this book. A sprite-drawing loop calls <code>calc_pixel_addr</code> once for the sprite's top row, then steps to subsequent rows using simple address arithmetic — which turns out to be a short sequence of operations once you understand the layout. That technique is covered in Chapter 6. For now, we have everything needed to write our first complete graphics program.</p>
+
+<h3>A Complete Example: Lighting a Single Pixel</h3>
+
+<p>When coordinates are fixed and known at assembly time you do not need a subroutine. Apply the address formula by hand, derive the numbers once, and write them directly into the code. To give all four fields of the layout something to do, let's use a non-trivial coordinate: pixel (x=52, y=100), somewhere in the middle of the screen.</p>
+
+<p>Working through the formula by hand:</p>
+
+<pre><code><span class="comment">; y = 100 = %01100100</span>
+<span class="comment">;            T T R R R L L L</span>
+<span class="comment">;            0 1 1 0 0 1 0 0</span>
+<span class="comment">;</span>
+<span class="comment">;   TT  = 01  →  second third  (base $4800)</span>
+<span class="comment">;   RRR = 100  →  character row 4  within that third</span>
+<span class="comment">;   LLL = 100  →  scan line 4  within that character row</span>
+<span class="comment">;</span>
+<span class="comment">;  High byte:  0 1 0 0 1 1 0 0  =  $4C</span>
+<span class="comment">;  Low  byte:  1 0 0 0 0 1 1 0  =  $86</span>
+<span class="comment">;  Display file address  =  $4C86</span>
+<span class="comment">;</span>
+<span class="comment">; Cross-check:  second third base $4800</span>
+<span class="comment">;             + scan line 4  → +$400  =  $4C00</span>
+<span class="comment">;             + char row 4   → +$080  =  $4C80</span>
+<span class="comment">;             + column 6     → +$006  =  $4C86  ✓</span>
+<span class="comment">;</span>
+<span class="comment">;  x = 52,  bit offset = 52 AND 7 = 4</span>
+<span class="comment">;  Bitmask: %10000000 rotated right 4  →  %00001000</span>
+<span class="comment">;</span>
+<span class="comment">;  cy = 100 / 8 = 12,  cx = 52 / 8 = 6</span>
+<span class="comment">;  Attribute address  =  $5800 + (12 × 32) + 6  =  $5800 + $180 + 6  =  $5986</span></code></pre>
+
+<p>Notice that all four fields are non-zero this time — TT, RRR, LLL and the column all contribute to the final address, so you can verify the formula is doing real work. Here is the complete program:</p>
+
+<pre><code>    <span class="directive">ORG</span> <span class="number">$8000</span>
+
+    <span class="comment">; Set pixel at (x=52, y=100)</span>
+    <span class="comment">; Display file address = $4C86,  bitmask = %00001000 (bit 3)</span>
+    <span class="keyword">LD</span>  HL, <span class="number">$4C86</span>        <span class="comment">; point at the byte containing our pixel</span>
+    <span class="keyword">LD</span>  A, (HL)          <span class="comment">; read the existing byte — preserves the other 7 pixels in this byte</span>
+    <span class="keyword">OR</span>  <span class="number">%00001000</span>        <span class="comment">; set bit 3 — our pixel</span>
+    <span class="keyword">LD</span>  (HL), A          <span class="comment">; write back</span>
+
+    <span class="comment">; Colour the character cell at (52, 100): bright yellow ink on black paper</span>
+    <span class="comment">; Attribute value $46 — format covered in Chapter 2</span>
+    <span class="keyword">LD</span>  HL, <span class="number">$5986</span>        <span class="comment">; attribute byte for this cell</span>
+    <span class="keyword">LD</span>  (HL), <span class="number">$46</span>        <span class="comment">; bright yellow ink on black paper</span>
+
+    <span class="keyword">RET</span>                  <span class="comment">; return to BASIC</span>
+
+    <span class="directive">END</span> <span class="number">$8000</span></code></pre>
+
+<p>Assemble with Pasmo (or whichever Z80 assembler your toolchain uses) and load into your emulator. The pixel appears at approximately x=52, y=100 — a little over one-sixth across the screen and just past halfway down. You will see a small black square (the 8&times;8 character cell, whose paper colour is now black) with a single bright yellow dot inside it, against the otherwise white default background.</p>
+
+<p>The <code>OR %00001000</code> pattern deserves attention. The byte at <code>$4C86</code> holds eight pixels, not one — bits 7 down to 0 represent the eight pixels in that horizontal run. Writing the mask directly with <code>LD (HL), %00001000</code> would clear the other seven pixels in the same byte. The correct approach — and the one every graphics routine in this book follows — is to read the existing byte, OR your bit in, then write back. That preserves the neighbours. The counterpart operations are AND with an inverted mask to clear a pixel, and XOR to toggle one; both are covered in Chapter 3.</p>
+
+<h3>Reusable Library Files</h3>
+
+<p>Rather than copying the routines into every program, save each one as its own <code>.asm</code> file. Pasmo's <code>INCLUDE</code> directive pastes the file in at assembly time, making all its labels available to the rest of your program. Save the following two files alongside your programs.</p>
+
+<p><strong>calc_pixel_addr.asm</strong></p>
+
+<pre><code><span class="comment">; calc_pixel_addr</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">; Output: HL = display file address of the byte containing the pixel</span>
+<span class="comment">;          A = bitmask for that pixel  (bit 7 = leftmost)</span>
+<span class="comment">; Destroys: B</span>
+<span class="label">calc_pixel_addr</span>:
+    <span class="keyword">LD</span>  A, B
+    <span class="keyword">AND</span> <span class="number">%11000000</span>        <span class="comment">; isolate TT (bits 7–6)</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; } rotate TT right 3</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">OR</span>  <span class="number">%01000000</span>        <span class="comment">; set fixed $40 base</span>
+    <span class="keyword">LD</span>  H, A             <span class="comment">; H = 010TT000</span>
+    <span class="keyword">LD</span>  A, B
+    <span class="keyword">AND</span> <span class="number">%00000111</span>        <span class="comment">; isolate LLL (bits 2–0)</span>
+    <span class="keyword">OR</span>  H                <span class="comment">; A = 010TTLLL</span>
+    <span class="keyword">LD</span>  H, A             <span class="comment">; H complete</span>
+
+    <span class="keyword">LD</span>  A, B
+    <span class="keyword">AND</span> <span class="number">%00111000</span>        <span class="comment">; isolate RRR (bits 5–3)</span>
+    <span class="keyword">RLCA</span>                 <span class="comment">; } rotate RRR left 2</span>
+    <span class="keyword">RLCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">LD</span>  L, A             <span class="comment">; L = RRR00000</span>
+    <span class="keyword">LD</span>  A, C
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; } divide x by 8</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">AND</span> <span class="number">%00011111</span>        <span class="comment">; mask off rotated-in bits</span>
+    <span class="keyword">OR</span>  L                <span class="comment">; A = RRRCCCCC</span>
+    <span class="keyword">LD</span>  L, A             <span class="comment">; L complete — HL = display file address</span>
+
+    <span class="keyword">LD</span>  A, C
+    <span class="keyword">AND</span> <span class="number">%00000111</span>        <span class="comment">; A = bit position within byte (0–7)</span>
+    <span class="keyword">LD</span>  B, A             <span class="comment">; B = shift count</span>
+    <span class="keyword">LD</span>  A, <span class="number">%10000000</span>     <span class="comment">; start with leftmost pixel mask</span>
+    <span class="keyword">JR</span>  Z, .mask_done    <span class="comment">; shift count was 0: mask already correct</span>
+<span class="label">.mask_shift</span>:
+    <span class="keyword">RRCA</span>                 <span class="comment">; move mask right by one</span>
+    <span class="keyword">DJNZ</span> .mask_shift     <span class="comment">; repeat B times</span>
+<span class="label">.mask_done</span>:
+    <span class="keyword">RET</span></code></pre>
+
+<p><strong>calc_attr_addr.asm</strong></p>
+
+<pre><code><span class="comment">; calc_attr_addr</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">; Output: HL = attribute byte address</span>
+<span class="comment">; Destroys: A, DE</span>
+<span class="label">calc_attr_addr</span>:
+    <span class="keyword">LD</span>  A, B
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; } divide y by 8 to get character row</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">AND</span> <span class="number">%00011111</span>        <span class="comment">; A = cy (0–23)</span>
+    <span class="keyword">LD</span>  H, <span class="number">0</span>
+    <span class="keyword">LD</span>  L, A             <span class="comment">; HL = cy</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy *  2</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy *  4</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy *  8</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy * 16</span>
+    <span class="keyword">ADD</span> HL, HL           <span class="comment">; HL = cy * 32</span>
+    <span class="keyword">LD</span>  A, C
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; } divide x by 8 to get column</span>
+    <span class="keyword">RRCA</span>                 <span class="comment">; }</span>
+    <span class="keyword">AND</span> <span class="number">%00011111</span>        <span class="comment">; A = cx (0–31)</span>
+    <span class="keyword">ADD</span> A, L
+    <span class="keyword">LD</span>  L, A             <span class="comment">; HL = cy*32 + cx</span>
+    <span class="keyword">LD</span>  DE, <span class="number">$5800</span>
+    <span class="keyword">ADD</span> HL, DE           <span class="comment">; HL = attribute file address</span>
+    <span class="keyword">RET</span></code></pre>
+
+<h3>A Moving Pixel</h3>
+
+<p>With the library files in place, the following program moves a single pixel from the left edge of the screen to the right edge and then returns to BASIC. Three instructions appear here that have not been used before:</p>
+
+<p><strong>EI</strong> — Enable Interrupts. The Z80 has a flag inside the CPU that controls whether it responds to interrupt signals from external hardware. <strong>DI</strong> (Disable Interrupts) clears that flag; <strong>EI</strong> sets it again. When you run a program from BASIC with <code>RANDOMIZE USR</code>, interrupts are normally already enabled, so <code>EI</code> here is a safety measure rather than strictly necessary — but it costs one byte and one cycle, and makes the program reliable regardless of what state the CPU was left in.</p>
+
+<p><strong>HALT</strong> suspends execution until the next maskable interrupt. The Spectrum's display chip fires that interrupt 50 times per second, so one <code>HALT</code> is a clean 20 ms pause — enough for the eye to follow the dot as it moves. If interrupts were disabled, <code>HALT</code> would pause forever, which is why <code>EI</code> comes first.</p>
+
+<p><strong>CPL</strong> flips every bit in A. After <code>calc_pixel_addr</code> returns the bitmask in A (one bit set, the rest clear), <code>CPL</code> inverts it to give one bit clear and the rest set — exactly the mask needed for <code>AND (HL)</code> to clear a single pixel while leaving its neighbours untouched.</p>
+
+<p>Save the following as <strong>moving_pixel.asm</strong> in the same folder as the two library files:</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="keyword">EI</span>                   <span class="comment">; ensure interrupts are on so HALT works</span>
+    <span class="keyword">LD</span>  B, <span class="number">88</span>            <span class="comment">; y = 88 — just above the middle of the screen</span>
+    <span class="keyword">LD</span>  C, <span class="number">0</span>             <span class="comment">; x = 0 — left edge</span>
+
+<span class="label">.loop</span>:
+    <span class="comment">; — Draw pixel at current position —</span>
+    <span class="keyword">PUSH</span> BC              <span class="comment">; calc_pixel_addr destroys B, so save coordinates</span>
+    <span class="keyword">CALL</span> calc_pixel_addr <span class="comment">; HL = byte address,  A = bitmask</span>
+    <span class="keyword">OR</span>  (HL)             <span class="comment">; set our pixel bit, preserve the other seven</span>
+    <span class="keyword">LD</span>  (HL), A
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; — Wait one TV frame so the dot is visible —</span>
+    <span class="keyword">HALT</span>                 <span class="comment">; 50 Hz interrupt — pauses ~20 ms</span>
+
+    <span class="comment">; — Erase pixel at current position —</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">CALL</span> calc_pixel_addr <span class="comment">; HL = byte address,  A = bitmask</span>
+    <span class="keyword">CPL</span>                  <span class="comment">; invert mask: 0 in our pixel's bit, 1s everywhere else</span>
+    <span class="keyword">AND</span> (HL)             <span class="comment">; clear our pixel bit, preserve the other seven</span>
+    <span class="keyword">LD</span>  (HL), A
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; — Move one pixel right and loop —</span>
+    <span class="keyword">INC</span>  C               <span class="comment">; x = x + 1</span>
+    <span class="keyword">JR</span>  NZ, .loop        <span class="comment">; when C wraps from 255 to 0 we have crossed the screen</span>
+
+    <span class="keyword">RET</span>                  <span class="comment">; back to BASIC</span>
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas moving_pixel.asm moving_pixel.tap</code> and load the TAP into your emulator — the BASIC loader runs automatically. A single dot slides smoothly across pixel row 88, crossing all 256 x positions — eight complete character columns — before the program exits. Because <code>calc_pixel_addr</code> recalculates the byte address and bitmask on every iteration, the dot crosses character-cell boundaries correctly without any special-case code: the same pattern (<code>OR (HL)</code> to set, <code>CPL</code> / <code>AND (HL)</code> to clear) works at every x coordinate from 0 to 255.</p>
+
+<p class="bold-text">Key fact: everything visual on the ZX Spectrum ultimately comes down to reading and writing bytes in two memory regions — the display file ($4000–$57FF) for pixel data, and the attribute file ($5800–$5AFF) for colour. No ROM calls are needed to draw anything. The address calculation routines in this chapter are the general form of exactly what the moving pixel example does on every iteration.</p>
+
+</section>
+
+<section id="2-attributes">
+<h1>2. Colours &amp; Attributes</h1>
+<a href="#toc" class="back-to-top">[Back to Contents]</a>
+
+<p>Chapter 1 used the attribute byte value <code>$46</code> without explaining what it meant. This chapter explains exactly what is in those 8 bits, how to construct any colour combination, and how to write attribute data efficiently. By the end you will have two new library routines and a complete program that draws a coloured trail across the screen.</p>
+
+<h2 id="2-attribute-byte">The Attribute Byte</h2>
+
+<p>The screen divides naturally into a grid of 8&times;8 pixel blocks — 32 columns wide and 24 rows tall. Each block is called a <strong>character cell</strong>, or just a <strong>cell</strong>. The name comes from the fact that one text character occupies exactly one cell. Every cell on screen has exactly one byte in the attribute file, and that byte controls the colour of all 64 pixels in the cell. That byte is the <strong>attribute byte</strong> for that cell, and its eight bits divide into four fields:</p>
+
+<pre><code><span class="comment">; Bit:   7      6      5   4   3      2   1   0</span>
+<span class="comment">;        FLASH  BRIGHT P2  P1  P0     I2  I1  I0</span>
+<span class="comment">;        │      │      └───┬───┘      └───┬───┘</span>
+<span class="comment">;        │      │        PAPER            INK</span>
+<span class="comment">;        │      │        (0–7)            (0–7)</span>
+<span class="comment">;        │      └── BRIGHT: 0 = normal colours,  1 = bright colours</span>
+<span class="comment">;        └───────── FLASH:  0 = steady,           1 = ink/paper swap at ~1.7 Hz</span></code></pre>
+
+<p><strong>INK</strong> (bits 2–0) is the colour used to draw pixels whose bit in the display file is 1. <strong>PAPER</strong> (bits 5–3) is the colour used for pixels whose bit is 0 — the background colour of the cell. <strong>BRIGHT</strong> (bit 6) switches the entire cell to a more vivid palette. <strong>FLASH</strong> (bit 7) causes the ULA to swap ink and paper automatically at about 1.7 Hz — no code is needed to maintain it once the bit is set.</p>
+
+<p>To make this concrete, here is <code>$46</code> from Chapter 1 decoded field by field:</p>
+
+<pre><code><span class="comment">; $46 = %01000110</span>
+<span class="comment">;</span>
+<span class="comment">;  Bit 7   FLASH  = 0  →  steady (no flashing)</span>
+<span class="comment">;  Bit 6   BRIGHT = 1  →  bright colours</span>
+<span class="comment">;  Bits 5–3  PAPER = 000  →  colour 0 (black)</span>
+<span class="comment">;  Bits 2–0  INK   = 110  →  colour 6 (yellow)</span>
+<span class="comment">;</span>
+<span class="comment">;  Result: bright yellow pixels on a black background</span></code></pre>
+
+<p>One attribute byte controls all 64 pixels in its 8&times;8 cell — every pixel in that block shares the same ink and paper colour. This is the central constraint of Spectrum graphics programming: <strong>you can never colour an individual pixel independently; you colour the entire cell it belongs to</strong>. This 8&times;8 granularity is why Spectrum games tend to align sprites to character-cell boundaries, and why two differently-coloured objects produce a colour clash when they share a cell. The pixel trail at the end of this chapter makes colour clash directly visible.</p>
+
+<h2 id="2-ink-paper">Ink, Paper, Bright &amp; Flash</h2>
+
+<p>Both INK and PAPER are encoded as a 3-bit number in the range 0–7. The eight colours in order are:</p>
+
+<table>
+<tr><th>Value</th><th>Colour</th><th>Normal</th><th>Bright</th></tr>
+<tr><td>0</td><td>Black</td><td>Black</td><td>Black — BRIGHT has no effect on colour 0</td></tr>
+<tr class="highlight-row"><td>1</td><td>Blue</td><td>Dark blue</td><td>Bright blue</td></tr>
+<tr><td>2</td><td>Red</td><td>Dark red</td><td>Bright red</td></tr>
+<tr class="highlight-row"><td>3</td><td>Magenta</td><td>Dark magenta</td><td>Bright magenta</td></tr>
+<tr><td>4</td><td>Green</td><td>Dark green</td><td>Bright green</td></tr>
+<tr class="highlight-row"><td>5</td><td>Cyan</td><td>Dark cyan</td><td>Bright cyan</td></tr>
+<tr><td>6</td><td>Yellow</td><td>Dark yellow</td><td>Bright yellow</td></tr>
+<tr class="highlight-row"><td>7</td><td>White</td><td>White</td><td>White (slightly more vivid)</td></tr>
+</table>
+
+<p><strong>BRIGHT</strong> switches the entire cell to a more vivid palette — the ULA drives a higher voltage level for the affected cell. Because BRIGHT applies to the whole cell, both ink and paper are brightened together. The exception is colour 0: black with BRIGHT is still black. This gives 15 distinct colours in practice — 7 normal shades, 7 bright shades, and one black that looks the same at both brightness levels.</p>
+
+<p><strong>FLASH</strong> is handled entirely by the ULA in hardware. Once bit 7 of an attribute byte is set to 1, the display chip swaps that cell's ink and paper colours at roughly 1.7 Hz. No code runs to maintain the effect. Writing 0 to bit 7 stops the flash immediately on the next display frame.</p>
+
+<h3>Building Attribute Bytes</h3>
+
+<p>To assemble an attribute byte from its parts, shift each field to its correct bit position and OR the results together. The comments below use the left-shift notation <code>&lt;&lt;</code>: <code>1 &lt;&lt; 6</code> means "take the value 1 and shift its bits six places to the left", giving <code>%01000000</code>. This is assembler arithmetic evaluated before your program runs — the assembler computes the result and embeds it as a plain byte, so the CPU never performs any shifting. This is different from instructions like <code>RLCA</code> or <code>RRCA</code>, which shift the live contents of A while the program is executing. <code>&lt;&lt;</code> only works on constants you know when writing the code; <code>RLCA</code>/<code>RRCA</code> work on values that only exist at runtime.</p>
+
+<pre><code><span class="comment">; attr = (FLASH &lt;&lt; 7) | (BRIGHT &lt;&lt; 6) | (PAPER &lt;&lt; 3) | INK</span>
+<span class="comment">;</span>
+<span class="comment">; Example: bright cyan ink on black paper, no flash</span>
+<span class="comment">;   FLASH=0, BRIGHT=1, PAPER=0 (black), INK=5 (cyan)</span>
+<span class="comment">;</span>
+<span class="comment">;   FLASH  shifted left 7: 0 &lt;&lt; 7 = %00000000</span>
+<span class="comment">;   BRIGHT shifted left 6: 1 &lt;&lt; 6 = %01000000</span>
+<span class="comment">;   PAPER  shifted left 3: 0 &lt;&lt; 3 = %00000000</span>
+<span class="comment">;   INK                  :     5 = %00000101</span>
+<span class="comment">;                         OR'd  = %01000101  =  $45</span></code></pre>
+
+<p>Alternatively, work the arithmetic out in your notes and write the final hex value directly — either way the result is the same: a constant byte baked into the program. The common pattern in game code is to give each such value a memorable name using the <code>EQU</code> directive. <code>EQU</code> (short for EQUate) tells the assembler to substitute the given value wherever the name appears. Unlike <code>DB</code> or <code>ORG</code>, it does not place any bytes in memory — it is purely a compile-time name for a number:</p>
+
+<pre><code><span class="comment">; Useful attribute constants</span>
+<span class="label">ATTR_CYAN_BRT</span>  <span class="directive">EQU</span>  <span class="number">$45</span>   <span class="comment">; bright cyan ink, black paper</span>
+<span class="label">ATTR_YEL_BRT</span>   <span class="directive">EQU</span>  <span class="number">$46</span>   <span class="comment">; bright yellow ink, black paper</span>
+<span class="label">ATTR_WHT_BRT</span>   <span class="directive">EQU</span>  <span class="number">$47</span>   <span class="comment">; bright white ink, black paper</span>
+<span class="label">ATTR_DEFAULT</span>   <span class="directive">EQU</span>  <span class="number">$38</span>   <span class="comment">; black ink, white paper — BASIC default</span></code></pre>
+
+<p>A reference table of the values used most often in game code:</p>
+
+<table>
+<tr><th>Value</th><th>Meaning</th></tr>
+<tr><td><code>$00</code></td><td>Black ink on black paper — invisible pixels; useful for erasing cells</td></tr>
+<tr class="highlight-row"><td><code>$07</code></td><td>White ink on black paper (normal brightness)</td></tr>
+<tr><td><code>$38</code></td><td>Black ink on white paper — the Spectrum's BASIC default</td></tr>
+<tr class="highlight-row"><td><code>$41</code></td><td>Bright blue ink on black paper</td></tr>
+<tr><td><code>$42</code></td><td>Bright red ink on black paper</td></tr>
+<tr class="highlight-row"><td><code>$44</code></td><td>Bright green ink on black paper</td></tr>
+<tr><td><code>$45</code></td><td>Bright cyan ink on black paper</td></tr>
+<tr class="highlight-row"><td><code>$46</code></td><td>Bright yellow ink on black paper (from Chapter 1)</td></tr>
+<tr><td><code>$47</code></td><td>Bright white ink on black paper</td></tr>
+<tr class="highlight-row"><td><code>$78</code></td><td>Black ink on bright white paper</td></tr>
+<tr><td><code>$80</code></td><td>Flash, black ink on black paper</td></tr>
+</table>
+
+<h2 id="2-writing-attributes">Writing Attributes</h2>
+
+<p>Writing an attribute byte is a one-instruction operation once you have the address: <code>LD (HL), A</code>. The interesting work is finding the right address and doing it efficiently for ranges of cells. This section builds three tools — a single-cell write routine, a row fill, and a full-screen fill — then puts them to work in a complete program.</p>
+
+<h3>Writing a Single Cell — set_attr</h3>
+
+<p><code>calc_attr_addr</code> from Chapter 1 handles the address calculation. <code>set_attr</code> wraps it with the write, giving a one-call interface. Because <code>calc_attr_addr</code> destroys A, the attribute value must be saved across the call.</p>
+
+<p>The Z80 has no instruction to push A alone — the only way to stack the accumulator is <code>PUSH AF</code>, which saves A and the Flags register together as a 16-bit pair. The flags are not needed here; they come along because that is how the hardware works. <code>POP AF</code> restores both: A gets back the attribute value, and the flags are restored to whatever state they were in before the call, which is a harmless side effect.</p>
+
+<pre><code><span class="comment">; set_attr</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">;         A = attribute byte to write</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: HL, DE</span>
+<span class="label">set_attr</span>:
+    <span class="keyword">PUSH</span> AF              <span class="comment">; PUSH AF saves A and Flags together — the only way to stack A</span>
+    <span class="keyword">CALL</span> calc_attr_addr  <span class="comment">; HL = attribute file address  (overwrites A and DE)</span>
+    <span class="keyword">POP</span>  AF              <span class="comment">; restore A (attribute byte) and Flags</span>
+    <span class="keyword">LD</span>  (HL), A          <span class="comment">; write it</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>set_attr.asm</strong>. Any program that includes both <code>calc_attr_addr.asm</code> and <code>set_attr.asm</code> can colour any cell with a single <code>CALL set_attr</code>.</p>
+
+<h3>Writing a Row of Cells</h3>
+
+<p>The attribute file is linear, so the 32 bytes of one character row are at consecutive addresses. To colour a full row, find the first cell with <code>calc_attr_addr</code> (passing x=0), then step through the remaining 31 cells with <code>INC HL</code>:</p>
+
+<pre><code><span class="comment">; Colour one full character row</span>
+<span class="comment">; Input:  B = any y coordinate in the target row  (0–191)</span>
+<span class="comment">;         A = attribute byte</span>
+    <span class="keyword">PUSH</span> AF              <span class="comment">; save attribute</span>
+    <span class="keyword">LD</span>  C, <span class="number">0</span>             <span class="comment">; x = 0 — leftmost column</span>
+    <span class="keyword">CALL</span> calc_attr_addr  <span class="comment">; HL = first attribute byte in this row</span>
+    <span class="keyword">POP</span>  AF              <span class="comment">; restore attribute</span>
+    <span class="keyword">LD</span>  B, <span class="number">32</span>            <span class="comment">; 32 cells per row</span>
+<span class="label">.row_loop</span>:
+    <span class="keyword">LD</span>  (HL), A          <span class="comment">; write attribute</span>
+    <span class="keyword">INC</span> HL               <span class="comment">; next cell — safe because attribute file is linear</span>
+    <span class="keyword">DJNZ</span> .row_loop</code></pre>
+
+<p>This is an inline fragment, not a standalone routine — embed it directly in your code where you need a row fill, or wrap it in a labelled subroutine with a <code>RET</code> if you need to call it from multiple places. It works because attribute bytes for adjacent cells are adjacent in memory. The same trick does not work in the display file, where consecutive pixel rows are not consecutive in memory — which is exactly why the address calculation routines from Chapter 1 are necessary.</p>
+
+<h3>Filling the Whole Screen</h3>
+
+<p>The entire attribute file is 768 bytes (<code>$5800</code> to <code>$5AFF</code>) stored linearly. A full-screen fill writes the same value to all 768 addresses. Three passes of 256 bytes each — using DJNZ's property that starting at B=0 gives 256 iterations — keeps the loop body as tight as possible:</p>
+
+<pre><code><span class="comment">; fill_screen_attr</span>
+<span class="comment">; Fill all 768 attribute bytes with a single value</span>
+<span class="comment">; Input:  A = attribute byte to fill with</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: BC, HL</span>
+<span class="label">fill_screen_attr</span>:
+    <span class="keyword">LD</span>  HL, <span class="number">$5800</span>        <span class="comment">; start of attribute file</span>
+    <span class="keyword">LD</span>  B, <span class="number">3</span>             <span class="comment">; 3 outer passes of 256 bytes = 768 bytes total</span>
+<span class="label">.outer</span>:
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">LD</span>  B, <span class="number">0</span>             <span class="comment">; B=0 → DJNZ loops 256 times (decrements to 255 on first pass)</span>
+<span class="label">.inner</span>:
+    <span class="keyword">LD</span>  (HL), A          <span class="comment">; write attribute — DJNZ does not touch A</span>
+    <span class="keyword">INC</span> HL
+    <span class="keyword">DJNZ</span> .inner
+    <span class="keyword">POP</span>  BC
+    <span class="keyword">DJNZ</span> .outer          <span class="comment">; 3 × 256 = 768</span>
+    <span class="keyword">RET</span></code></pre>
+
+<h3>A Coloured Pixel Trail</h3>
+
+<p>This program extends the moving pixel from Chapter 1. The pixel no longer erases itself — it leaves every dot set as it advances, drawing a solid line of pixels across row 88. At each column boundary (every 8 pixels) the program pauses one frame, then writes a new attribute byte with the next ink colour in a 7-step cycle. Because the attribute colours the full 8×8 character cell, the visible result is a horizontal band one character cell tall (8 pixels) running the full width of the screen, divided into 32 coloured segments that snap into place one at a time from left to right.</p>
+
+<p>The ink cycle skips colour 0 (black on black paper is invisible). The wrapping logic increments the current ink value, masks it to 0–7 with AND, then nudges it to 1 if it landed on 0, producing the sequence 1, 2, 3, 4, 5, 6, 7, 1, 2, …</p>
+
+<p>Save the following as <strong>pixel_trail.asm</strong> alongside <code>calc_pixel_addr.asm</code> and <code>calc_attr_addr.asm</code>:</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="keyword">EI</span>                    <span class="comment">; ensure interrupts are on for HALT</span>
+    <span class="keyword">LD</span>   B, <span class="number">88</span>           <span class="comment">; y = 88 — just above the middle of the screen</span>
+    <span class="keyword">LD</span>   C, <span class="number">0</span>            <span class="comment">; x = 0 — left edge</span>
+
+<span class="label">.loop</span>:
+    <span class="comment">; At each column boundary: pause and colour the new cell</span>
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">AND</span>  <span class="number">%00000111</span>        <span class="comment">; x mod 8: is this the first pixel of a new cell?</span>
+    <span class="keyword">JR</span>   NZ, .draw_pixel  <span class="comment">; no — just draw and continue</span>
+
+    <span class="keyword">HALT</span>                  <span class="comment">; yes — pause ~20 ms so each coloured band is visible</span>
+
+    <span class="comment">; Advance ink colour through 1–7, skipping 0 (black on black = invisible)</span>
+    <span class="keyword">LD</span>   A, (<span class="label">ink_colour</span>)
+    <span class="keyword">INC</span>  A
+    <span class="keyword">AND</span>  <span class="number">%00000111</span>        <span class="comment">; wrap: 8 → 0</span>
+    <span class="keyword">JR</span>   NZ, .store_ink
+    <span class="keyword">INC</span>  A                <span class="comment">; nudge: 0 → 1, skipping black</span>
+<span class="label">.store_ink</span>:
+    <span class="keyword">LD</span>   (<span class="label">ink_colour</span>), A
+    <span class="keyword">OR</span>   <span class="number">%01000000</span>        <span class="comment">; set BRIGHT bit — A = BRIGHT=1, PAPER=0, INK=colour</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">PUSH</span> AF               <span class="comment">; save A (attribute) and Flags — PUSH AF is the only way to stack A</span>
+    <span class="keyword">CALL</span> calc_attr_addr   <span class="comment">; HL = attribute address for this cell  (overwrites A and DE)</span>
+    <span class="keyword">POP</span>  AF               <span class="comment">; restore A (attribute) and Flags</span>
+    <span class="keyword">LD</span>   (HL), A          <span class="comment">; colour the cell</span>
+    <span class="keyword">POP</span>  BC
+
+<span class="label">.draw_pixel</span>:
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">CALL</span> calc_pixel_addr  <span class="comment">; HL = byte address,  A = bitmask</span>
+    <span class="keyword">OR</span>   (HL)             <span class="comment">; set pixel bit, preserve neighbours</span>
+    <span class="keyword">LD</span>   (HL), A
+    <span class="keyword">POP</span>  BC
+
+    <span class="keyword">INC</span>  C                <span class="comment">; x = x + 1</span>
+    <span class="keyword">JR</span>   NZ, .loop        <span class="comment">; stop when x wraps 255 → 0</span>
+
+    <span class="keyword">RET</span>                   <span class="comment">; back to BASIC</span>
+
+<span class="label">ink_colour</span>: <span class="directive">DB</span> <span class="number">0</span>         <span class="comment">; current ink index (0 = uninitialised; first use advances to 1)</span>
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"calc_attr_addr.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas pixel_trail.asm pixel_trail.tap</code> and load the TAP into your emulator — the BASIC loader runs automatically. A coloured band builds across the screen from left to right — blue, red, magenta, green, cyan, yellow, white, cycling — each cell snapping in with a 20 ms pause. The finished result is a single stripe one character cell tall spanning the full width of the screen.</p>
+
+<p>Two things are worth watching closely. First, <strong>colour clash</strong>: when a new cell's attribute byte is written, every pixel already set in that cell is immediately repainted in the new ink colour. The rightmost drawn pixel changes colour as each new cell opens, not after the cell is complete. This is the attribute system working exactly as designed — ink and paper are cell properties, not pixel properties.</p>
+
+<p>Second, notice that <code>calc_attr_addr</code> is called only 32 times (once per column boundary) while <code>calc_pixel_addr</code> is called 256 times (once per pixel). The attribute address calculation is the more expensive operation, but by calling it only when the cell changes the program avoids unnecessary work. This pattern — detect a boundary, then handle it — appears throughout game graphics code.</p>
+
+<p class="bold-text">Key fact: the attribute system separates colour from pixels entirely. Writing to the display file never affects colour; writing to the attribute file never affects which pixels are set. The two are independent, which makes it possible to repaint the screen's colours without touching a single pixel, and to move pixel data without changing any colours.</p>
+
+</section>
+
+<section id="3-drawing-pixels">
+<h1>3. Drawing Pixels</h1>
+<a href="#toc" class="back-to-top">[Back to Contents]</a>
+
+<p>Chapters 1 and 2 used pixel operations informally — <code>OR (HL)</code> to set a pixel, <code>CPL</code> / <code>AND (HL)</code> to clear one, with the explanation that XOR toggles. This chapter puts all three on a firm footing, explains exactly why each logical operation is the right tool, and wraps each one in a clean library routine. By the end you will have three new <code>.asm</code> files and a bouncing pixel that uses all of them in a proper animation loop.</p>
+
+<h2 id="3-setting-a-pixel">Setting a Single Pixel</h2>
+
+<p>Setting a pixel means forcing one specific bit in a display file byte to 1 while leaving the other seven bits exactly as they are. The right tool is <strong>OR</strong>.</p>
+
+<p>OR combines two bits according to one rule: the result is 1 if <em>either</em> input is 1, and 0 only if both inputs are 0. Applied to a full byte, each bit pair is processed independently:</p>
+
+<table>
+<tr><th>Existing bit</th><th>Mask bit</th><th>Result</th><th>Effect</th></tr>
+<tr><td>0</td><td>0</td><td>0</td><td>Unaffected — mask bit is 0, existing 0 stays 0</td></tr>
+<tr class="highlight-row"><td>0</td><td>1</td><td>1</td><td>Pixel set — mask bit forces result to 1</td></tr>
+<tr><td>1</td><td>0</td><td>1</td><td>Unaffected — mask bit is 0, existing 1 stays 1</td></tr>
+<tr class="highlight-row"><td>1</td><td>1</td><td>1</td><td>Pixel set (was already set)</td></tr>
+</table>
+
+<p>The bitmask from <code>calc_pixel_addr</code> has exactly one 1 — the target pixel's bit — and seven 0s everywhere else. OR with a 0 leaves any existing bit unchanged; OR with a 1 forces the result to 1. The seven bits that are 0 in the mask therefore pass through untouched, and only the target bit is set. This is why the read-modify-write sequence is necessary: the read preserves those seven neighbours, OR sets the one target bit, and the write puts the whole byte back.</p>
+
+<pre><code><span class="comment">; set_pixel</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, HL</span>
+<span class="label">set_pixel</span>:
+    <span class="keyword">CALL</span> calc_pixel_addr  <span class="comment">; HL = byte address,  A = bitmask</span>
+    <span class="keyword">OR</span>   (HL)             <span class="comment">; set target bit, preserve the other seven</span>
+    <span class="keyword">LD</span>   (HL), A          <span class="comment">; write back</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>set_pixel.asm</strong>. Note that <code>calc_pixel_addr</code> must also be included in any program that uses <code>set_pixel</code>, since <code>set_pixel</code> calls it. The routine destroys B because <code>calc_pixel_addr</code> uses B internally as a shift counter.</p>
+
+<h2 id="3-clearing-a-pixel">Clearing a Single Pixel</h2>
+
+<p>Clearing a pixel means forcing one specific bit to 0 while leaving the other seven unchanged. OR cannot do this — OR can only set bits, never clear them. The right tool is <strong>AND</strong>, but with an inverted mask.</p>
+
+<p>AND produces a 1 only when <em>both</em> inputs are 1; if either input is 0 the result is 0:</p>
+
+<table>
+<tr><th>Existing bit</th><th>Inverted mask bit</th><th>Result</th><th>Effect</th></tr>
+<tr><td>0</td><td>1</td><td>0</td><td>Unaffected — existing 0 stays 0</td></tr>
+<tr class="highlight-row"><td>0</td><td>0</td><td>0</td><td>Pixel cleared (was already 0)</td></tr>
+<tr><td>1</td><td>1</td><td>1</td><td>Unaffected — existing 1 stays 1</td></tr>
+<tr class="highlight-row"><td>1</td><td>0</td><td>0</td><td>Pixel cleared — inverted mask bit forces result to 0</td></tr>
+</table>
+
+<p>The inverted mask has exactly one 0 — at the target pixel's bit position — and seven 1s everywhere else. AND with a 1 passes the existing bit through unchanged; AND with a 0 forces the result to 0. So only the target bit is cleared, and the seven neighbours are untouched.</p>
+
+<p><code>calc_pixel_addr</code> returns the normal mask in A (one 1, seven 0s). <strong>CPL</strong> inverts every bit in A, producing the inverted mask (one 0, seven 1s) needed for the AND:</p>
+
+<pre><code><span class="comment">; clear_pixel</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, HL</span>
+<span class="label">clear_pixel</span>:
+    <span class="keyword">CALL</span> calc_pixel_addr  <span class="comment">; HL = byte address,  A = bitmask  (one 1, seven 0s)</span>
+    <span class="keyword">CPL</span>                   <span class="comment">; invert A  →  inverted mask  (one 0, seven 1s)</span>
+    <span class="keyword">AND</span>  (HL)             <span class="comment">; clear target bit, preserve the other seven</span>
+    <span class="keyword">LD</span>   (HL), A          <span class="comment">; write back</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>clear_pixel.asm</strong>.</p>
+
+<h2 id="3-toggling-a-pixel">Toggling a Pixel</h2>
+
+<p>Toggling a pixel means flipping one bit — 0 becomes 1, 1 becomes 0 — without needing to know which state it is currently in. Neither OR nor AND can do this cleanly. The right tool is <strong>XOR</strong>.</p>
+
+<p>XOR (eXclusive OR) produces a 1 when the two inputs are <em>different</em>, and a 0 when they are the <em>same</em>:</p>
+
+<table>
+<tr><th>Existing bit</th><th>Mask bit</th><th>Result</th><th>Effect</th></tr>
+<tr><td>0</td><td>0</td><td>0</td><td>Unaffected — XOR with 0 never changes a bit</td></tr>
+<tr class="highlight-row"><td>0</td><td>1</td><td>1</td><td>Flipped: 0 → 1</td></tr>
+<tr><td>1</td><td>0</td><td>1</td><td>Unaffected</td></tr>
+<tr class="highlight-row"><td>1</td><td>1</td><td>0</td><td>Flipped: 1 → 0</td></tr>
+</table>
+
+<p>XOR with a 0 leaves the existing bit unchanged. XOR with a 1 flips the existing bit, regardless of what it was. Because the mask has exactly one 1, exactly one bit is flipped and the rest are left alone. Call <code>toggle_pixel</code> twice on the same coordinate and the pixel returns to its original state — which makes XOR ideal for animation: you do not need to track whether the pixel is currently on or off, because the toggle works correctly either way.</p>
+
+<pre><code><span class="comment">; toggle_pixel</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, HL</span>
+<span class="label">toggle_pixel</span>:
+    <span class="keyword">CALL</span> calc_pixel_addr  <span class="comment">; HL = byte address,  A = bitmask</span>
+    <span class="keyword">XOR</span>  (HL)             <span class="comment">; flip target bit, leave the other seven unchanged</span>
+    <span class="keyword">LD</span>   (HL), A          <span class="comment">; write back</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>toggle_pixel.asm</strong>.</p>
+
+<p>The three operations together cover every pixel state transition possible:</p>
+
+<table>
+<tr><th>Operation</th><th>Instruction</th><th>Use when</th></tr>
+<tr><td>Set</td><td><code>OR (HL)</code></td><td>You want the pixel on, regardless of current state</td></tr>
+<tr class="highlight-row"><td>Clear</td><td><code>CPL</code> then <code>AND (HL)</code></td><td>You want the pixel off, regardless of current state</td></tr>
+<tr><td>Toggle</td><td><code>XOR (HL)</code></td><td>You want to flip the pixel without checking its state</td></tr>
+</table>
+
+<h3>A Bouncing Pixel</h3>
+
+<p>This program uses <code>set_pixel</code> and <code>clear_pixel</code> together to animate a pixel bouncing left and right across pixel row 88. It introduces three new ideas.</p>
+
+<p><strong>A direction variable</strong> stored in memory. The pixel's x coordinate is kept in a memory byte rather than a register, because the animation loop must preserve it across many HALTs and subroutine calls. The direction is stored as a signed byte: <code>1</code> means moving right, <code>$FF</code> means moving left. On the Z80, <code>$FF</code> is the two's complement representation of &minus;1 — adding <code>$FF</code> to an 8-bit value is identical to subtracting 1. The direction byte is added to x each frame to advance the pixel; negating it reverses direction.</p>
+
+<p><strong>CP</strong> — ComPare. <code>CP n</code> subtracts <code>n</code> from A and sets the flags exactly as <code>SUB</code> would, but throws away the result — A is unchanged. This lets you test a value and branch on the outcome without overwriting A. After <code>CP 0</code>, the Zero flag is set if A was 0; after <code>CP 255</code>, the Zero flag is set if A was 255. Combined with <code>JR Z</code>, this detects when the pixel hits either edge.</p>
+
+<p><strong>NEG</strong> — Negate. <code>NEG</code> computes A = 0 &minus; A, which is the two's complement negation of A. Applied to <code>1</code> it produces <code>$FF</code> (&minus;1); applied to <code>$FF</code> it produces <code>1</code>. This flips the direction between +1 and &minus;1 with a single instruction, with no need for a branch or a comparison.</p>
+
+<p>The animation loop follows the pattern every game uses: clear old position → update state → draw new position → wait for next frame:</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="keyword">EI</span>
+    <span class="keyword">LD</span>   B, <span class="number">88</span>            <span class="comment">; y = 88 — fixed for the whole program</span>
+    <span class="keyword">LD</span>   A, <span class="number">0</span>
+    <span class="keyword">LD</span>   (<span class="label">px</span>), A          <span class="comment">; starting x = 0</span>
+    <span class="keyword">LD</span>   A, <span class="number">1</span>
+    <span class="keyword">LD</span>   (<span class="label">dir</span>), A         <span class="comment">; starting direction = +1 (moving right)</span>
+
+<span class="label">.loop</span>:
+    <span class="keyword">HALT</span>                  <span class="comment">; sync to frame start — clear+draw finish before the beam reaches row 88</span>
+
+    <span class="comment">; — Clear pixel at current position —</span>
+    <span class="keyword">LD</span>   A, (<span class="label">px</span>)
+    <span class="keyword">LD</span>   C, A             <span class="comment">; C = current x</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">CALL</span> clear_pixel      <span class="comment">; erase the dot  (destroys A, B, HL)</span>
+    <span class="keyword">POP</span>  BC               <span class="comment">; restore B = y = 88,  C = current x</span>
+
+    <span class="comment">; — Advance x by direction —</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dir</span>)
+    <span class="keyword">ADD</span>  A, C             <span class="comment">; x = x + direction</span>
+    <span class="keyword">LD</span>   (<span class="label">px</span>), A          <span class="comment">; save new x</span>
+
+    <span class="comment">; — Reverse direction at edges —</span>
+    <span class="keyword">CP</span>   <span class="number">255</span>              <span class="comment">; did x reach the right edge?</span>
+    <span class="keyword">JR</span>   Z, .reverse
+    <span class="keyword">CP</span>   <span class="number">0</span>               <span class="comment">; did x reach the left edge?</span>
+    <span class="keyword">JR</span>   NZ, .draw        <span class="comment">; neither edge — keep going</span>
+<span class="label">.reverse</span>:
+    <span class="keyword">LD</span>   A, (<span class="label">dir</span>)
+    <span class="keyword">NEG</span>                   <span class="comment">; negate direction: 1 → $FF ($FF = −1),  $FF → 1</span>
+    <span class="keyword">LD</span>   (<span class="label">dir</span>), A
+
+<span class="label">.draw</span>:
+    <span class="comment">; — Draw pixel at new position —</span>
+    <span class="keyword">LD</span>   A, (<span class="label">px</span>)
+    <span class="keyword">LD</span>   C, A             <span class="comment">; C = new x</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">CALL</span> set_pixel        <span class="comment">; draw the dot  (destroys A, B, HL)</span>
+    <span class="keyword">POP</span>  BC               <span class="comment">; restore B = y = 88</span>
+
+    <span class="keyword">JR</span>   .loop            <span class="comment">; repeat forever</span>
+
+<span class="label">px</span>:  <span class="directive">DB</span>  <span class="number">0</span>               <span class="comment">; current x position</span>
+<span class="label">dir</span>: <span class="directive">DB</span>  <span class="number">1</span>               <span class="comment">; direction: 1 = right,  $FF = left</span>
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"set_pixel.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"clear_pixel.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas bounce.asm bounce.tap</code> and load the TAP into your emulator — the BASIC loader runs automatically. The pixel travels right across the screen, bounces off the right edge, travels left, bounces off the left edge, and repeats indefinitely. On real Spectrum hardware the motion is perfectly smooth. On an emulator running on a modern computer you may see occasional stuttering — the Spectrum outputs frames at 50 Hz but most monitors refresh at 60 Hz, so roughly one in every six Spectrum frames is held on screen for two monitor refresh cycles instead of one. This is a display hardware mismatch rather than a code problem; the Z80 is producing frames at a perfectly constant rate.</p>
+
+<p>Notice that <code>HALT</code> is at the top of the loop, not the bottom. This matters for two reasons — speed consistency and flicker.</p>
+
+<p><strong>Speed.</strong> The interrupt fires at exactly 50 Hz. Every iteration starts by waiting for the interrupt, then does all its work — clear, advance, draw — in the ~19.85 ms gap before the next one arrives. Because those operations together take only a few hundred microseconds, the next <code>HALT</code> is always reached long before the following interrupt fires, giving a consistent 20 ms wait every time and moving the pixel at a rock-steady 50 pixels per second. Placing <code>HALT</code> at the bottom of the loop instead would break this: if the interrupt happened to fire just before <code>HALT</code> was reached, <code>HALT</code> would return almost immediately and the pixel would advance again after only a few microseconds, producing alternating very-short and very-long frames — the pixel darts then pauses, darts then pauses. <code>HALT</code> at the top is the fix.</p>
+
+<p><strong>Flicker.</strong> The Spectrum's TV beam scans from the top of the screen downward. The interrupt fires when the beam reaches the bottom — the start of the vertical blanking period — so returning from <code>HALT</code> means the beam is about to start a fresh pass from the top. Row 88 is roughly halfway down, which means the clear and draw both complete approximately 9 ms before the beam reaches that row. With <code>HALT</code> at the bottom, clear and draw happen at an unpredictable point mid-frame; if the beam happened to be scanning row 88 between those two calls the pixel would visibly flicker.</p>
+
+<p>Notice also that B is saved with <code>PUSH BC</code> and restored with <code>POP BC</code> around each <code>CALL</code>. Both <code>set_pixel</code> and <code>clear_pixel</code> call <code>calc_pixel_addr</code>, which destroys B. The y coordinate must survive those calls because it is used again in the next iteration, so it is held in B between frames and pushed to the stack for the duration of each call.</p>
+
+<p class="bold-text">Key fact: OR sets, AND-with-inverted-mask clears, XOR toggles. Every pixel operation in this book is one of these three patterns applied to the byte that <code>calc_pixel_addr</code> identifies. The choice between them depends entirely on what you want to happen to a bit that is already in the state you are trying to produce — OR leaves it set, AND leaves it clear, XOR flips it.</p>
+
+</section>
+
+<section id="4-drawing-lines">
+<h1>4. Drawing Lines</h1>
+<a href="#toc" class="back-to-top">[Back to Contents]</a>
+
+<p>Horizontal and vertical lines are the building blocks of almost every game screen — borders, platforms, maze walls, health bars, HUD frames. A line is nothing more than a sequence of pixels, but drawing it efficiently matters: a naive approach that calls <code>set_pixel</code> for every pixel is eight times slower than it needs to be. This chapter builds three library routines — <code>draw_hline</code>, <code>draw_vline</code>, and <code>draw_line</code> — and closes with a screen border example that uses the two axis-aligned routines.</p>
+
+<h2 id="4-horizontal-lines">Horizontal Lines</h2>
+
+<p>A horizontal line shares one y coordinate across all its pixels. On the Spectrum, eight consecutive pixels on the same row are packed into a single byte of the display file. Writing <code>$FF</code> to that byte sets all eight at once — eight times faster than calling <code>set_pixel</code> eight times. The routine below exploits this wherever it can.</p>
+
+<h3>The Three-Region Model</h3>
+
+<p>A horizontal line from x1 to x2 on row y spans up to three regions in the display file:</p>
+
+<table>
+<tr><th>Region</th><th>Description</th><th>How to draw</th></tr>
+<tr><td>Left partial byte</td><td>x1 to the end of its byte (if x1 is not byte-aligned)</td><td>OR a mask — preserve pixels to the left of x1</td></tr>
+<tr class="highlight-row"><td>Middle full bytes</td><td>All complete bytes between the two partial ends</td><td><code>LD (HL), $FF</code> — overwrite all eight pixels</td></tr>
+<tr><td>Right partial byte</td><td>Start of the last byte to x2 (if x2 is not byte-aligned)</td><td>OR a mask — preserve pixels to the right of x2</td></tr>
+</table>
+
+<p>When x1 and x2 fall inside the same byte there is only one region: a single OR combining both the left and right masks.</p>
+
+<p>Advancing along a row is just <strong><code>INC L</code></strong> — not <code>INC HL</code>. All bytes on the same pixel row share the same H byte; only the low byte changes as the column advances from 0 to 31. Because a row spans at most 32 bytes, L never overflows into H, so <code>INC L</code> is safe and one byte shorter than <code>INC HL</code>.</p>
+
+<h3>Edge Masks</h3>
+
+<p>The left-edge mask covers bit positions from x1's pixel down to bit 0 of the byte. The right-edge mask covers bit positions from bit 7 down to x2's pixel. Both depend only on the low three bits of x — that is, <code>x &amp; 7</code>, the pixel's position within its byte. There are only eight possible values for each, so a lookup table is the natural first idea:</p>
+
+<table>
+<tr><th>x &amp; 7</th><th>Left mask<br>(x1 to bit 0)</th><th>Right mask<br>(bit 7 to x2)</th></tr>
+<tr><td>0</td><td>%11111111</td><td>%10000000</td></tr>
+<tr class="highlight-row"><td>1</td><td>%01111111</td><td>%11000000</td></tr>
+<tr><td>2</td><td>%00111111</td><td>%11100000</td></tr>
+<tr class="highlight-row"><td>3</td><td>%00011111</td><td>%11110000</td></tr>
+<tr><td>4</td><td>%00001111</td><td>%11111000</td></tr>
+<tr class="highlight-row"><td>5</td><td>%00000111</td><td>%11111100</td></tr>
+<tr><td>6</td><td>%00000011</td><td>%11111110</td></tr>
+<tr class="highlight-row"><td>7</td><td>%00000001</td><td>%11111111</td></tr>
+</table>
+
+<p>To read from such a table you load its base address into HL, add the index (<code>x &amp; 7</code>) to L, then read through HL. That approach works, but it consumes HL — which <code>draw_hline</code> needs to hold the current screen address throughout the routine. Saving and restoring HL around every table lookup adds PUSH/POP pairs that erode the speed advantage the table was supposed to provide.</p>
+
+<p>For at most seven shift operations it is simpler and no slower to compute the mask directly at runtime using <strong>SRL</strong> and <strong>SLA</strong>.</p>
+
+<h3>draw_hline</h3>
+
+<p><strong>SRL</strong> (Shift Right Logical) shifts A one bit right, filling bit 7 with 0. Repeating it <em>n</em> times produces <code>$FF &gt;&gt; n</code> — exactly the left-edge mask. <strong>SLA</strong> (Shift Left Arithmetic) shifts A one bit left, filling bit 0 with 0. Repeating it <em>n</em> times produces <code>$FF &lt;&lt; n</code> — the right-edge mask. Both are CB-prefixed instructions, two bytes each, and both are valid on every Z80. The shift count is at most 7, so the loop runs at most seven iterations — fast enough that no table is needed.</p>
+
+<p>The middle-byte count requires the byte column of x1 and x2 — that is, x divided by 8 (x&nbsp;&gt;&gt;&nbsp;3). The Z80 has no right-shift instruction that operates on A directly in fewer than two bytes per shift, but <strong>RRCA</strong> (Rotate Right Circular A) is a single byte and very fast. After three RRCAs the original bits 7–3 have rotated into positions 4–0. <code>AND&nbsp;%00011111</code> then masks away the three bits that wrapped around from the bottom, leaving exactly x&nbsp;&gt;&gt;&nbsp;3 in the low five bits.</p>
+
+<pre><code><span class="comment">; draw_hline</span>
+<span class="comment">; Draw a horizontal line on pixel row y from x1 to x2.</span>
+<span class="comment">; Input:  B = y   (0–191)</span>
+<span class="comment">;         C = x1  (0–255, left end)</span>
+<span class="comment">;         D = x2  (0–255, right end, must be >= x1)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="comment">; Note: calc_pixel_addr preserves C and D, so x1 and x2 survive the CALL.</span>
+<span class="label">draw_hline</span>:
+    <span class="keyword">CALL</span> calc_pixel_addr   <span class="comment">; HL = byte address of x1  (C=x1 and D=x2 are preserved)</span>
+
+    <span class="comment">; — Same-byte check: XOR high bits of x1 and x2 —</span>
+    <span class="keyword">LD</span>   A, D
+    <span class="keyword">XOR</span>  C
+    <span class="keyword">AND</span>  <span class="number">%11111000</span>         <span class="comment">; non-zero if x1 and x2 are in different bytes</span>
+    <span class="keyword">JR</span>   Z, .same_byte
+
+    <span class="comment">; — Left partial byte: mask = $FF &gt;&gt; (x1 &amp; 7) —</span>
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">AND</span>  <span class="number">%00000111</span>         <span class="comment">; shift count = x1 mod 8</span>
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, <span class="number">$FF</span>
+    <span class="keyword">JR</span>   Z, .lm_done       <span class="comment">; count=0: x1 is at leftmost bit, mask stays $FF</span>
+<span class="label">.lm_loop</span>:
+    <span class="keyword">SRL</span>  A                 <span class="comment">; shift right, 0 fills from top — one step of $FF &gt;&gt; n</span>
+    <span class="keyword">DJNZ</span> .lm_loop
+<span class="label">.lm_done</span>:
+    <span class="keyword">OR</span>   (HL)              <span class="comment">; set pixels from x1 down to end of byte, preserve left neighbours</span>
+    <span class="keyword">LD</span>   (HL), A
+    <span class="keyword">INC</span>  L                 <span class="comment">; next byte (same row — INC L safe, not INC HL)</span>
+
+    <span class="comment">; — Middle full bytes: count = (x2&gt;&gt;3) - (x1&gt;&gt;3) - 1 —</span>
+    <span class="comment">; Extract byte column via three RRCA then AND %00011111</span>
+    <span class="keyword">LD</span>   A, D
+    <span class="keyword">RRCA</span>
+    <span class="keyword">RRCA</span>
+    <span class="keyword">RRCA</span>
+    <span class="keyword">AND</span>  <span class="number">%00011111</span>         <span class="comment">; x2 byte column (0–31)</span>
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">RRCA</span>
+    <span class="keyword">RRCA</span>
+    <span class="keyword">RRCA</span>
+    <span class="keyword">AND</span>  <span class="number">%00011111</span>         <span class="comment">; x1 byte column (0–31)</span>
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, E
+    <span class="keyword">SUB</span>  B                 <span class="comment">; x2col - x1col</span>
+    <span class="keyword">DEC</span>  A                 <span class="comment">; - 1 = number of middle bytes</span>
+    <span class="keyword">JR</span>   Z, .right_byte    <span class="comment">; zero: x1 and x2 are adjacent bytes, no middle</span>
+    <span class="keyword">JR</span>   C, .right_byte    <span class="comment">; carry guard (should not occur)</span>
+    <span class="keyword">LD</span>   B, A
+<span class="label">.middle</span>:
+    <span class="keyword">LD</span>   (HL), <span class="number">$FF</span>         <span class="comment">; all 8 pixels set</span>
+    <span class="keyword">INC</span>  L
+    <span class="keyword">DJNZ</span> .middle
+
+<span class="label">.right_byte</span>:
+    <span class="comment">; — Right partial byte: mask = $FF &lt;&lt; (7 - x2 &amp; 7) —</span>
+    <span class="keyword">LD</span>   A, D
+    <span class="keyword">AND</span>  <span class="number">%00000111</span>         <span class="comment">; x2 mod 8</span>
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, <span class="number">7</span>
+    <span class="keyword">SUB</span>  B                 <span class="comment">; shift count = 7 - (x2 mod 8)</span>
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, <span class="number">$FF</span>
+    <span class="keyword">JR</span>   Z, .rm_done       <span class="comment">; count=0: x2 is at rightmost bit, mask stays $FF</span>
+<span class="label">.rm_loop</span>:
+    <span class="keyword">SLA</span>  A                 <span class="comment">; shift left, 0 fills from bottom — one step of $FF &lt;&lt; n</span>
+    <span class="keyword">DJNZ</span> .rm_loop
+<span class="label">.rm_done</span>:
+    <span class="keyword">OR</span>   (HL)              <span class="comment">; set pixels from start of byte down to x2, preserve right neighbours</span>
+    <span class="keyword">LD</span>   (HL), A
+    <span class="keyword">RET</span>
+
+<span class="label">.same_byte</span>:
+    <span class="comment">; — Both x1 and x2 in the same byte: AND the left and right masks —</span>
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">AND</span>  <span class="number">%00000111</span>
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, <span class="number">$FF</span>
+    <span class="keyword">JR</span>   Z, .sb_lm_done
+<span class="label">.sb_lm_loop</span>:
+    <span class="keyword">SRL</span>  A
+    <span class="keyword">DJNZ</span> .sb_lm_loop
+<span class="label">.sb_lm_done</span>:
+    <span class="keyword">LD</span>   E, A              <span class="comment">; E = left mask</span>
+
+    <span class="keyword">LD</span>   A, D
+    <span class="keyword">AND</span>  <span class="number">%00000111</span>
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, <span class="number">7</span>
+    <span class="keyword">SUB</span>  B
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, <span class="number">$FF</span>
+    <span class="keyword">JR</span>   Z, .sb_rm_done
+<span class="label">.sb_rm_loop</span>:
+    <span class="keyword">SLA</span>  A
+    <span class="keyword">DJNZ</span> .sb_rm_loop
+<span class="label">.sb_rm_done</span>:
+    <span class="keyword">AND</span>  E                 <span class="comment">; intersection: only the pixels strictly between x1 and x2</span>
+    <span class="keyword">OR</span>   (HL)
+    <span class="keyword">LD</span>   (HL), A
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>draw_hline.asm</strong>. Any program that uses it must also <code>INCLUDE "calc_pixel_addr.asm"</code>.</p>
+
+<h2 id="4-vertical-lines">Vertical Lines</h2>
+
+<p>A vertical line shares one x coordinate across all its pixels. Consecutive pixels on the same column are in completely different bytes — different rows have different TTRRRLLL addresses — so writing eight pixels at once is not possible. Every pixel on a vertical line needs its own display file byte access.</p>
+
+<p>There is no single magic constant that steps one pixel row in all cases. The address formula from Chapter 1 shows why:</p>
+
+<pre><code><span class="comment">; Address = $4000 + (T × $800) + (L × $100) + (R × $20) + C</span>
+<span class="comment">; (T = third, bits 7:6 of y;  L = scan line, bits 2:0 of y;  R = char row, bits 5:3 of y)</span>
+<span class="comment">;</span>
+<span class="comment">; L (scan line) lives in H bits 2:0 — one step = INC H  (+$0100)</span>
+<span class="comment">; R (char row)  lives in L bits 7:5 — one step = ADD $20 to L  (+$0020)</span>
+<span class="comment">;</span>
+<span class="comment">; Moving from scan line L to L+1 increases the address by $0100 (= INC H).</span>
+<span class="comment">; That works cleanly while L &lt; 7.</span>
+<span class="comment">; When L = 7, INC H would carry into H bit 3 (part of the T field) — wrong.</span>
+<span class="comment">; Instead: AND H with $F8 to reset L=0, then ADD $20 to the low byte to step R.</span>
+<span class="comment">; If R then wraps from 7 to 0, add $08 to H to step T.</span>
+<span class="comment">;</span>
+<span class="comment">; Example: y=7  → H=$47, L=C      (T=0, R=0, L=7)</span>
+<span class="comment">;          y=8  → H=$40, L=$20+C  (T=0, R=1, L=0  — character row stepped)</span>
+<span class="comment">;          y=63 → H=$47, L=$E0+C  (T=0, R=7, L=7  — end of first third)</span>
+<span class="comment">;          y=64 → H=$48, L=C      (T=1, R=0, L=0  — third stepped)</span></code></pre>
+
+<p>The scan line (L) field is in H bits 2:0, so advancing one pixel row is normally a single <code>INC H</code>. The special case at L&nbsp;=&nbsp;7 needs explicit handling: carry from H bits 2:0 into bit 3 would corrupt the T field, so the code clears the LLL bits with <code>AND $F8</code> and advances R separately.</p>
+
+<h3>draw_vline</h3>
+
+<pre><code><span class="comment">; draw_vline</span>
+<span class="comment">; Draw a vertical line on pixel column x from y1 to y2.</span>
+<span class="comment">; Input:  B = y1  (0–191, top)</span>
+<span class="comment">;         C = x   (0–255)</span>
+<span class="comment">;         D = y2  (0–191, bottom, must be >= y1)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="label">draw_vline</span>:
+    <span class="keyword">PUSH</span> BC                <span class="comment">; save y1 (B) — calc_pixel_addr destroys B</span>
+    <span class="keyword">CALL</span> calc_pixel_addr   <span class="comment">; HL = byte address,  A = bitmask for column x</span>
+    <span class="keyword">LD</span>   E, A              <span class="comment">; save bitmask in E before POP overwrites A</span>
+    <span class="keyword">POP</span>  BC                <span class="comment">; restore B = y1  (C = x, no longer needed)</span>
+
+    <span class="keyword">LD</span>   A, D              <span class="comment">; y2</span>
+    <span class="keyword">SUB</span>  B                 <span class="comment">; y2 - y1  (B = y1 restored by POP)</span>
+    <span class="keyword">INC</span>  A                 <span class="comment">; pixel count = y2 - y1 + 1</span>
+    <span class="keyword">LD</span>   B, A              <span class="comment">; B = DJNZ counter</span>
+
+    <span class="keyword">LD</span>   C, E              <span class="comment">; bitmask into C</span>
+<span class="label">dv_loop</span>:
+    <span class="keyword">LD</span>   A, C              <span class="comment">; bitmask</span>
+    <span class="keyword">OR</span>   (HL)              <span class="comment">; set pixel, preserve neighbours</span>
+    <span class="keyword">LD</span>   (HL), A
+    <span class="comment">; advance HL to the next pixel row</span>
+    <span class="keyword">LD</span>   A, H
+    <span class="keyword">AND</span>  <span class="number">$07</span>               <span class="comment">; isolate scan line field (LLL, H bits 2:0)</span>
+    <span class="keyword">CP</span>   <span class="number">$07</span>               <span class="comment">; at scan line 7?</span>
+    <span class="keyword">JR</span>   Z, dv_cross       <span class="comment">; yes: step the character row explicitly</span>
+    <span class="keyword">INC</span>  H                 <span class="comment">; no: simple scan line increment</span>
+    <span class="keyword">DJNZ</span> dv_loop
+    <span class="keyword">RET</span>
+<span class="label">dv_cross</span>:
+    <span class="comment">; Scan line 7 → 0: reset LLL, step RRR in L</span>
+    <span class="keyword">LD</span>   A, H
+    <span class="keyword">AND</span>  <span class="number">$F8</span>               <span class="comment">; clear H bits 2:0 (LLL = 0), T field in bits 4:3 preserved</span>
+    <span class="keyword">LD</span>   H, A
+    <span class="keyword">LD</span>   A, L
+    <span class="keyword">ADD</span>  A, <span class="number">$20</span>            <span class="comment">; step RRR (character row field, L bits 7:5)</span>
+    <span class="keyword">LD</span>   L, A
+    <span class="keyword">JR</span>   NC, dv_next       <span class="comment">; no carry: still in same third</span>
+    <span class="keyword">LD</span>   A, H
+    <span class="keyword">ADD</span>  A, <span class="number">$08</span>            <span class="comment">; RRR overflowed: step TT (third field, H bits 4:3)</span>
+    <span class="keyword">LD</span>   H, A
+<span class="label">dv_next</span>:
+    <span class="keyword">DJNZ</span> dv_loop
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>draw_vline.asm</strong>. Any program using it must also <code>INCLUDE "calc_pixel_addr.asm"</code>.</p>
+
+<p>Two register discipline points worth noting. First, <code>calc_pixel_addr</code> destroys B (it uses B as an internal shift counter), so y1 must be saved on the stack before the call and restored with <code>POP BC</code> afterwards. Second, the bitmask is moved from E to C before the loop so that A is free for the row-advance calculations inside <code>dv_cross</code> without disturbing the bitmask or the DJNZ counter in B.</p>
+
+<h2 id="4-bresenham">Bresenham's Line Algorithm</h2>
+
+<p>Horizontal and vertical lines cover most game needs, but arbitrary diagonal lines require a general solution. <strong>Bresenham's line algorithm</strong> draws the closest integer approximation to any straight line using only addition and subtraction — no multiplication, no division, no floating-point arithmetic, making it well-suited to the Z80.</p>
+
+<h3>The Idea</h3>
+
+<p>Imagine walking from (x1, y1) to (x2, y2) one step at a time along the longer axis (the <em>major</em> axis). At each step you advance one pixel along the major axis. Occasionally you also step one pixel along the shorter axis (the <em>minor</em> axis) to track the true line's slope. The question is: when do you take the minor step?</p>
+
+<p>Bresenham's answer: keep an integer <em>error</em> variable that accumulates the difference between where the true line is and where the drawn line is. Each major step adds a fixed amount to the error. When the error exceeds the half-way threshold, take a minor step and subtract the threshold from the error. The result is a line that stays within half a pixel of the true line at every point.</p>
+
+<p>The algorithm handles all directions by tracking the sign of dx and dy separately:</p>
+
+<pre><code><span class="comment">; Bresenham variables</span>
+<span class="comment">;   dx = |x2 - x1|,  sx = +1 if x2 > x1 else -1 ($FF)</span>
+<span class="comment">;   dy = |y2 - y1|,  sy = +1 if y2 > y1 else -1 ($FF)</span>
+<span class="comment">;   err = dx - dy</span>
+<span class="comment">;</span>
+<span class="comment">; Each iteration:</span>
+<span class="comment">;   set pixel at (x, y)</span>
+<span class="comment">;   if x==x2 and y==y2: done</span>
+<span class="comment">;   e2 = 2 * err</span>
+<span class="comment">;   if e2 > -dy: err -= dy;  x += sx</span>
+<span class="comment">;   if e2 <  dx: err += dx;  y += sy</span></code></pre>
+
+<p>On the Z80, <code>2 * err</code> is just <code>ADD A, A</code> (left shift by one). The comparisons use signed arithmetic — <code>JP M</code> (jump if minus, i.e. if the sign flag is set) rather than the unsigned <code>JR C</code>.</p>
+
+<h3>draw_line</h3>
+
+<p>The Z80 has no instruction to add or subtract a memory-addressed value directly to A except via <code>(HL)</code>. Instructions like <code>ADD A, (addr)</code> and <code>SUB (addr)</code> are not valid. Every memory operand must be loaded into a register first: <code>LD B, A</code> to save A, then <code>LD A, (addr)</code>, then <code>ADD A, B</code>. Bresenham requires several such operations, which is why the routine stores all working state in named memory variables and loads them explicitly as needed.</p>
+
+<p>A second constraint: with 8-bit signed arithmetic, the error variable fits in a byte only when <code>dx</code> and <code>dy</code> are each at most 63. Longer diagonals require 16-bit error tracking; <code>draw_line</code> as written works correctly for lines up to 63 pixels in each dimension — sufficient for most game sprites and HUD elements.</p>
+
+<pre><code><span class="comment">; draw_line</span>
+<span class="comment">; Draw a line from (x1,y1) to (x2,y2) using Bresenham's algorithm.</span>
+<span class="comment">; Input:  B = y1  (0–191)    C = x1  (0–255)</span>
+<span class="comment">;         D = y2  (0–191)    E = x2  (0–255)</span>
+<span class="comment">; Constraint: |x2-x1| and |y2-y1| must each be at most 63.</span>
+<span class="comment">; Output: none    Destroys: A, B, C, D, E, H, L</span>
+<span class="label">draw_line</span>:
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">LD</span>   (<span class="label">dl_x</span>),  A         <span class="comment">; x = x1</span>
+    <span class="keyword">LD</span>   A, B
+    <span class="keyword">LD</span>   (<span class="label">dl_y</span>),  A         <span class="comment">; y = y1</span>
+    <span class="keyword">LD</span>   A, E
+    <span class="keyword">LD</span>   (<span class="label">dl_x2</span>), A         <span class="comment">; target x2</span>
+    <span class="keyword">LD</span>   A, D
+    <span class="keyword">LD</span>   (<span class="label">dl_y2</span>), A         <span class="comment">; target y2</span>
+
+    <span class="comment">; dx = |x2-x1|,  sx = +1 or $FF (-1)</span>
+    <span class="keyword">LD</span>   A, E
+    <span class="keyword">SUB</span>  C                  <span class="comment">; A = x2 - x1 (signed)</span>
+    <span class="keyword">JP</span>   P, .dx_pos
+    <span class="keyword">NEG</span>                     <span class="comment">; make positive for dx</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_dx</span>), A
+    <span class="keyword">LD</span>   A, <span class="number">$FF</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_sx</span>), A          <span class="comment">; sx = $FF (-1): moving left</span>
+    <span class="keyword">JR</span>   .dy_calc
+<span class="label">.dx_pos</span>:
+    <span class="keyword">LD</span>   (<span class="label">dl_dx</span>), A
+    <span class="keyword">LD</span>   A, <span class="number">1</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_sx</span>), A          <span class="comment">; sx = 1: moving right</span>
+
+<span class="label">.dy_calc</span>:
+    <span class="comment">; dy = |y2-y1|,  sy = +1 or $FF (-1)</span>
+    <span class="keyword">LD</span>   A, D
+    <span class="keyword">SUB</span>  B                  <span class="comment">; A = y2 - y1 (signed)</span>
+    <span class="keyword">JP</span>   P, .dy_pos
+    <span class="keyword">NEG</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_dy</span>), A
+    <span class="keyword">LD</span>   A, <span class="number">$FF</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_sy</span>), A          <span class="comment">; sy = $FF (-1): moving up</span>
+    <span class="keyword">JR</span>   .err_calc
+<span class="label">.dy_pos</span>:
+    <span class="keyword">LD</span>   (<span class="label">dl_dy</span>), A
+    <span class="keyword">LD</span>   A, <span class="number">1</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_sy</span>), A          <span class="comment">; sy = 1: moving down</span>
+
+<span class="label">.err_calc</span>:
+    <span class="comment">; err = dx - dy</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dl_dx</span>)
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_dy</span>)
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">LD</span>   A, B
+    <span class="keyword">SUB</span>  C                  <span class="comment">; A = dx - dy</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_err</span>), A
+
+<span class="label">dl_loop</span>:
+    <span class="comment">; — Draw pixel at (x, y) —</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dl_y</span>)
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_x</span>)
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">CALL</span> set_pixel
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; — Check if done: x==x2 and y==y2 —</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dl_x2</span>)
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_x</span>)
+    <span class="keyword">CP</span>   B
+    <span class="keyword">JR</span>   NZ, dl_not_done
+    <span class="keyword">LD</span>   A, (<span class="label">dl_y2</span>)
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_y</span>)
+    <span class="keyword">CP</span>   B
+    <span class="keyword">JR</span>   Z, dl_done
+<span class="label">dl_not_done</span>:
+
+    <span class="comment">; — e2 = 2 * err —</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dl_err</span>)
+    <span class="keyword">ADD</span>  A, A               <span class="comment">; e2 = err * 2 (left shift by 1)</span>
+    <span class="keyword">LD</span>   B, A               <span class="comment">; B = e2, preserved across both branch tests below</span>
+
+    <span class="comment">; — if e2 > -dy: err -= dy;  x += sx —</span>
+    <span class="comment">; Test: dy + e2 > 0  ↔  e2 > -dy</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dl_dy</span>)
+    <span class="keyword">ADD</span>  A, B               <span class="comment">; A = dy + e2</span>
+    <span class="keyword">JR</span>   Z, dl_skip_x       <span class="comment">; e2 == -dy: condition false</span>
+    <span class="keyword">JP</span>   M, dl_skip_x       <span class="comment">; e2 &lt; -dy: condition false</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dl_err</span>)
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_dy</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">SUB</span>  D                  <span class="comment">; err -= dy  (load dy to D, subtract from err in C)</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_err</span>), A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_x</span>)
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_sx</span>)
+    <span class="keyword">ADD</span>  A, C               <span class="comment">; x += sx  ($FF + x = x - 1 in 8-bit arithmetic)</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_x</span>), A
+<span class="label">dl_skip_x</span>:
+
+    <span class="comment">; — if e2 &lt; dx: err += dx;  y += sy —</span>
+    <span class="comment">; Test: e2 - dx &lt; 0  ↔  e2 &lt; dx</span>
+    <span class="keyword">LD</span>   A, B               <span class="comment">; restore e2 (B unchanged since we saved it)</span>
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_dx</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">SUB</span>  D                  <span class="comment">; A = e2 - dx</span>
+    <span class="keyword">JP</span>   P, dl_skip_y       <span class="comment">; positive or zero: e2 >= dx, condition false</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dl_err</span>)
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_dx</span>)
+    <span class="keyword">ADD</span>  A, C               <span class="comment">; err += dx</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_err</span>), A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_y</span>)
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">LD</span>   A, (<span class="label">dl_sy</span>)
+    <span class="keyword">ADD</span>  A, C               <span class="comment">; y += sy</span>
+    <span class="keyword">LD</span>   (<span class="label">dl_y</span>), A
+<span class="label">dl_skip_y</span>:
+
+    <span class="keyword">JR</span>   dl_loop
+
+<span class="label">dl_done</span>:
+    <span class="keyword">RET</span>
+
+<span class="label">dl_x</span>:   <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; current x</span>
+<span class="label">dl_y</span>:   <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; current y</span>
+<span class="label">dl_x2</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; target x</span>
+<span class="label">dl_y2</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; target y</span>
+<span class="label">dl_dx</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; |x2-x1|</span>
+<span class="label">dl_dy</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; |y2-y1|</span>
+<span class="label">dl_sx</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; x step: 1 or $FF</span>
+<span class="label">dl_sy</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; y step: 1 or $FF</span>
+<span class="label">dl_err</span>: <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; Bresenham error accumulator</span></code></pre>
+
+<p>Save this as <strong>draw_line.asm</strong>. Any program using it must also <code>INCLUDE "calc_pixel_addr.asm"</code> and <code>INCLUDE "set_pixel.asm"</code>.</p>
+
+<p>Every memory load follows the same pattern: <code>LD A, (addr)</code> to get the value into A, then <code>LD reg, A</code> to move it to a working register, leaving A free for the arithmetic. This is the only way to operate on memory-resident values on the Z80 — there is no <code>ADD A, (addr)</code> instruction.</p>
+
+<p><strong>JP P / JP M</strong> — Jump if Positive / Jump if Minus. These branch on the Sign flag, which reflects the most significant bit of the last arithmetic result. A result with bit 7 set is treated as negative in two's complement; <code>JP M</code> jumps if that bit is set, <code>JP P</code> jumps if it is clear. Bresenham's comparisons must be signed because the error accumulator represents a signed difference.</p>
+
+<p>The <code>dl_x</code>, <code>dl_y</code> and companion variables at the end of the routine are writable working storage, not constants. The routine overwrites them on every call. This means <code>draw_line.asm</code> must be assembled into RAM — it cannot be placed in ROM. For a <code>pasmo --tapbas</code> program loaded at <code>$8000</code> this is always the case.</p>
+
+<h3>draw_line example</h3>
+
+<p>The following program draws four diagonal lines radiating from the screen centre, one into each quadrant, demonstrating all four directions of travel.</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="comment">; centre (128,96) to top-left (68,36)  — dx=60, dy=60</span>
+    <span class="keyword">LD</span>   B, <span class="number">96</span>  <span class="comment">; y1</span>
+    <span class="keyword">LD</span>   C, <span class="number">128</span> <span class="comment">; x1</span>
+    <span class="keyword">LD</span>   D, <span class="number">36</span>  <span class="comment">; y2</span>
+    <span class="keyword">LD</span>   E, <span class="number">68</span>  <span class="comment">; x2</span>
+    <span class="keyword">CALL</span> draw_line
+
+    <span class="comment">; centre (128,96) to top-right (188,36)  — dx=60, dy=60</span>
+    <span class="keyword">LD</span>   B, <span class="number">96</span>
+    <span class="keyword">LD</span>   C, <span class="number">128</span>
+    <span class="keyword">LD</span>   D, <span class="number">36</span>
+    <span class="keyword">LD</span>   E, <span class="number">188</span>
+    <span class="keyword">CALL</span> draw_line
+
+    <span class="comment">; centre (128,96) to bottom-left (68,156)  — dx=60, dy=60</span>
+    <span class="keyword">LD</span>   B, <span class="number">96</span>
+    <span class="keyword">LD</span>   C, <span class="number">128</span>
+    <span class="keyword">LD</span>   D, <span class="number">156</span>
+    <span class="keyword">LD</span>   E, <span class="number">68</span>
+    <span class="keyword">CALL</span> draw_line
+
+    <span class="comment">; centre (128,96) to bottom-right (188,156)  — dx=60, dy=60</span>
+    <span class="keyword">LD</span>   B, <span class="number">96</span>
+    <span class="keyword">LD</span>   C, <span class="number">128</span>
+    <span class="keyword">LD</span>   D, <span class="number">156</span>
+    <span class="keyword">LD</span>   E, <span class="number">188</span>
+    <span class="keyword">CALL</span> draw_line
+
+    <span class="keyword">EI</span>
+<span class="label">.done:</span>
+    <span class="keyword">HALT</span>
+    <span class="keyword">JR</span>   .done
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"set_pixel.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_line.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas diagonals.asm diagonals.tap</code>. Four lines radiate from near the screen centre, forming an X. Each line spans exactly 60 pixels in both x and y — well within the 63-pixel per-axis constraint, so the 8-bit error accumulator does not overflow.</p>
+
+<h2 id="4-border">A Screen Border</h2>
+
+<p>This program draws a one-pixel border around the full screen using <code>draw_hline</code> and <code>draw_vline</code>, then loops forever so BASIC cannot overwrite the display.</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="comment">; Top edge: y=0, x1=0, x2=255</span>
+    <span class="keyword">LD</span>   B, <span class="number">0</span>
+    <span class="keyword">LD</span>   C, <span class="number">0</span>
+    <span class="keyword">LD</span>   D, <span class="number">255</span>
+    <span class="keyword">CALL</span> draw_hline
+
+    <span class="comment">; Bottom edge: y=191, x1=0, x2=255</span>
+    <span class="keyword">LD</span>   B, <span class="number">191</span>
+    <span class="keyword">LD</span>   C, <span class="number">0</span>
+    <span class="keyword">LD</span>   D, <span class="number">255</span>
+    <span class="keyword">CALL</span> draw_hline
+
+    <span class="comment">; Left edge: x=0, y1=0, y2=191</span>
+    <span class="keyword">LD</span>   B, <span class="number">0</span>
+    <span class="keyword">LD</span>   C, <span class="number">0</span>
+    <span class="keyword">LD</span>   D, <span class="number">191</span>
+    <span class="keyword">CALL</span> draw_vline
+
+    <span class="comment">; Right edge: x=255, y1=0, y2=191</span>
+    <span class="keyword">LD</span>   B, <span class="number">0</span>
+    <span class="keyword">LD</span>   C, <span class="number">255</span>
+    <span class="keyword">LD</span>   D, <span class="number">191</span>
+    <span class="keyword">CALL</span> draw_vline
+
+    <span class="keyword">EI</span>
+<span class="label">.done:</span>
+    <span class="keyword">HALT</span>
+    <span class="keyword">JR</span>   .done             <span class="comment">; loop forever — reset to exit</span>
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_hline.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_vline.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas border.asm border.tap</code> and load the TAP into your emulator — the BASIC loader runs automatically. A white rectangle appears around the full screen boundary: two horizontal lines at y=0 and y=191, two vertical lines at x=0 and x=255.</p>
+
+<p>The program does not end with <code>RET</code>. If it returned to BASIC, the interpreter would print its <em>0 OK</em> report at the bottom of the screen — character rows 20–23, which cover pixel rows 160–191. That would immediately erase the bottom border line at y=191. Instead the program loops on <code>HALT</code> forever, waiting for interrupts and doing nothing else. The border stays visible until you reset the machine.</p>
+
+<p>Notice that <code>draw_line</code> is not included here — this example does not need it. Include only the library files a program actually calls; unused routines waste memory and assembly time.</p>
+
+<p class="bold-text">Key fact: horizontal lines are fast because an entire byte of eight pixels can be written in one instruction. Vertical lines must touch a separate byte for every pixel but gain efficiency from the constant <code>+$20</code> address step between rows. Arbitrary lines call <code>set_pixel</code> for every point and are the slowest of the three — use <code>draw_hline</code> and <code>draw_vline</code> whenever the line is axis-aligned.</p>
+
+</section>
+
+<section id="5-drawing-shapes">
+<h1>5. Drawing Shapes</h1>
+<a href="#toc" class="back-to-top">[Back to Contents]</a>
+
+<p>The line routines from chapter 4 are the foundation for every closed shape. A rectangle is four lines. A filled rectangle is a stack of horizontal lines. A circle is a sequence of pixel pairs arranged by an integer decision variable. This chapter builds four new library routines — <code>draw_rect</code>, <code>fill_rect</code>, <code>draw_circle</code>, and <code>flood_fill</code> — and closes with a focused example for each one.</p>
+
+<h2 id="5-rectangles">Rectangles</h2>
+
+<h3>Hollow Rectangle</h3>
+
+<p>A hollow rectangle is exactly four lines: top edge, bottom edge, left edge, right edge. <code>draw_hline</code> draws the horizontal edges and <code>draw_vline</code> draws the vertical ones. The corners are included in the horizontal calls; the vertical calls run between the corners so no pixel is drawn twice — though overdrawing with OR is harmless in any case.</p>
+
+<pre><code><span class="comment">; draw_rect</span>
+<span class="comment">; Draw a hollow rectangle.</span>
+<span class="comment">; Input:  B = y1  (0–191, top)</span>
+<span class="comment">;         C = x1  (0–255, left)</span>
+<span class="comment">;         D = y2  (0–191, bottom, must be >= y1)</span>
+<span class="comment">;         E = x2  (0–255, right,  must be >= x1)</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="label">draw_rect</span>:
+    <span class="comment">; Top edge: y=y1, x1 to x2</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">PUSH</span> DE
+    <span class="keyword">LD</span>   D, E              <span class="comment">; draw_hline needs x2 in D; E holds x2, D holds y2</span>
+    <span class="keyword">CALL</span> draw_hline        <span class="comment">; B=y1, C=x1, D=x2</span>
+    <span class="keyword">POP</span>  DE
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; Bottom edge: y=y2, x1 to x2</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">PUSH</span> DE
+    <span class="keyword">LD</span>   B, D              <span class="comment">; y = y2</span>
+    <span class="keyword">LD</span>   D, E              <span class="comment">; draw_hline needs x2 in D</span>
+    <span class="keyword">CALL</span> draw_hline        <span class="comment">; B=y2, C=x1, D=x2</span>
+    <span class="keyword">POP</span>  DE
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; Skip vertical edges if height is 1 (y1 == y2)</span>
+    <span class="keyword">LD</span>   A, B
+    <span class="keyword">CP</span>   D                 <span class="comment">; y1 == y2?</span>
+    <span class="keyword">JR</span>   Z, dr_no_vert
+
+    <span class="comment">; Left edge: x=x1, y1+1 to y2-1</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">PUSH</span> DE
+    <span class="keyword">INC</span>  B                 <span class="comment">; y1+1 — skip corner already drawn</span>
+    <span class="keyword">DEC</span>  D                 <span class="comment">; y2-1 — skip corner already drawn</span>
+    <span class="keyword">CALL</span> draw_vline        <span class="comment">; B=y1+1, C=x1, D=y2-1</span>
+    <span class="keyword">POP</span>  DE
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; Right edge: x=x2, y1+1 to y2-1</span>
+    <span class="keyword">INC</span>  B                 <span class="comment">; y1+1</span>
+    <span class="keyword">DEC</span>  D                 <span class="comment">; y2-1</span>
+    <span class="keyword">LD</span>   C, E              <span class="comment">; x = x2</span>
+    <span class="keyword">CALL</span> draw_vline        <span class="comment">; B=y1+1, C=x2, D=y2-1</span>
+<span class="label">dr_no_vert</span>:
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>draw_rect.asm</strong>. It requires <code>draw_hline.asm</code>, <code>draw_vline.asm</code>, and <code>calc_pixel_addr.asm</code>.</p>
+
+<p>The PUSH/POP pairs preserve the original coordinates across each sub-call. <code>draw_hline</code> and <code>draw_vline</code> both destroy B, C, D — so the inputs must be saved before every call and restored before the next. The vertical edges run from y1+1 to y2-1 to avoid drawing the corners twice; with OR semantics this is a style choice rather than a correctness requirement. The <code>LD A, B / CP D / JR Z, .no_vert</code> guard before the vertical calls handles the degenerate case where y1&nbsp;==&nbsp;y2 — without it, the vertical calls would receive an inverted range (y1+1 &gt; y2-1) and produce undefined behaviour.</p>
+
+<h3>Filled Rectangle</h3>
+
+<p>A filled rectangle is a horizontal line repeated for every row from y1 to y2. The row count is <code>y2 - y1 + 1</code>. The row counter is kept in memory and decremented with <code>DEC A / JR NZ</code> — DJNZ cannot be used because <code>draw_hline</code> destroys B on every call.</p>
+
+<pre><code><span class="comment">; fill_rect</span>
+<span class="comment">; Draw a solid filled rectangle.</span>
+<span class="comment">; Input:  B = y1  (0–191, top)</span>
+<span class="comment">;         C = x1  (0–255, left)</span>
+<span class="comment">;         D = y2  (0–191, bottom, must be >= y1)</span>
+<span class="comment">;         E = x2  (0–255, right,  must be >= x1)</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="label">fill_rect</span>:
+    <span class="keyword">LD</span>   A, D
+    <span class="keyword">SUB</span>  B                 <span class="comment">; y2 - y1</span>
+    <span class="keyword">INC</span>  A                 <span class="comment">; row count = y2 - y1 + 1</span>
+    <span class="keyword">LD</span>   (<span class="label">fr_rows</span>), A
+    <span class="keyword">LD</span>   A, B
+    <span class="keyword">LD</span>   (<span class="label">fr_y</span>),    A      <span class="comment">; save starting y</span>
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">LD</span>   (<span class="label">fr_x1</span>),   A      <span class="comment">; save x1</span>
+    <span class="keyword">LD</span>   A, E
+    <span class="keyword">LD</span>   (<span class="label">fr_x2</span>),   A      <span class="comment">; save x2</span>
+
+<span class="label">fr_loop</span>:
+    <span class="keyword">LD</span>   A, (<span class="label">fr_y</span>)
+    <span class="keyword">LD</span>   B, A              <span class="comment">; current row</span>
+    <span class="keyword">LD</span>   A, (<span class="label">fr_x1</span>)
+    <span class="keyword">LD</span>   C, A              <span class="comment">; x1</span>
+    <span class="keyword">LD</span>   A, (<span class="label">fr_x2</span>)
+    <span class="keyword">LD</span>   D, A              <span class="comment">; x2</span>
+    <span class="keyword">CALL</span> draw_hline
+
+    <span class="keyword">LD</span>   A, (<span class="label">fr_y</span>)
+    <span class="keyword">INC</span>  A
+    <span class="keyword">LD</span>   (<span class="label">fr_y</span>), A          <span class="comment">; advance to next row</span>
+
+    <span class="keyword">LD</span>   A, (<span class="label">fr_rows</span>)
+    <span class="keyword">DEC</span>  A
+    <span class="keyword">LD</span>   (<span class="label">fr_rows</span>), A
+    <span class="keyword">JR</span>   NZ, fr_loop
+    <span class="keyword">RET</span>
+
+<span class="label">fr_y</span>:    <span class="directive">DB</span> <span class="number">0</span>
+<span class="label">fr_x1</span>:   <span class="directive">DB</span> <span class="number">0</span>
+<span class="label">fr_x2</span>:   <span class="directive">DB</span> <span class="number">0</span>
+<span class="label">fr_rows</span>: <span class="directive">DB</span> <span class="number">0</span></code></pre>
+
+<p>Save this as <strong>fill_rect.asm</strong>. It requires <code>draw_hline.asm</code> and <code>calc_pixel_addr.asm</code>.</p>
+
+<p>DJNZ cannot be used directly here because <code>draw_hline</code> destroys B. The row counter is kept in memory (<code>fr_rows</code>) and decremented with <code>DEC A</code> / <code>JR NZ</code> instead. The same pattern — store working state in named variables, reload before each sub-call — is the standard approach whenever a called routine destroys the registers you need to preserve.</p>
+
+<p class="bold-text">Filled rectangles are the fastest shape per pixel: <code>draw_hline</code> writes eight pixels per instruction in the middle of each row. A 32×32 filled rectangle writes all 32 middle bytes per row with 32 <code>LD (HL), $FF</code> instructions and only touches partial bytes at the left and right edges.</p>
+
+<h2 id="5-circles">Circles</h2>
+
+<h3>The Midpoint Circle Algorithm</h3>
+
+<p>Drawing a circle with floating-point trigonometry is too slow for the Z80. The <strong>midpoint circle algorithm</strong> (sometimes called Bresenham's circle algorithm) draws a circle using only integer addition and subtraction — no multiply, divide, or sine table.</p>
+
+<p>The algorithm exploits <strong>8-fold symmetry</strong>: a circle centred at (cx, cy) is symmetric across both axes and both diagonals. If you know the pixel at offset (+x, +y) lies on the circle, the seven mirrors are immediate:</p>
+
+<table>
+<tr><th>Octant</th><th>Pixel</th></tr>
+<tr><td>1</td><td>(cx+x, cy+y)</td></tr>
+<tr class="highlight-row"><td>2</td><td>(cx−x, cy+y)</td></tr>
+<tr><td>3</td><td>(cx+x, cy−y)</td></tr>
+<tr class="highlight-row"><td>4</td><td>(cx−x, cy−y)</td></tr>
+<tr><td>5</td><td>(cx+y, cy+x)</td></tr>
+<tr class="highlight-row"><td>6</td><td>(cx−y, cy+x)</td></tr>
+<tr><td>7</td><td>(cx+y, cy−x)</td></tr>
+<tr class="highlight-row"><td>8</td><td>(cx−y, cy−x)</td></tr>
+</table>
+
+<p>Each step of the algorithm computes one new (x, y) offset and plots all eight mirrors. The decision variable <code>d</code> starts at <code>1 - radius</code> and tells the algorithm whether to step only in x or also in y:</p>
+
+<pre><code><span class="comment">; Midpoint circle — pseudocode</span>
+<span class="comment">;   x = 0,  y = radius,  d = 1 - radius</span>
+<span class="comment">;</span>
+<span class="comment">; while x &lt;= y:</span>
+<span class="comment">;   plot 8 symmetric pixels</span>
+<span class="comment">;   x += 1</span>
+<span class="comment">;   if d &lt; 0:  d += 2*x + 1</span>
+<span class="comment">;   else:      y -= 1 ;  d += 2*(x - y) + 1</span></code></pre>
+
+<p>On the Z80, <code>2*x</code> is <code>ADD A, A</code>. The signed comparison <code>d &lt; 0</code> tests the Sign flag after updating d — the same <code>JP M</code> technique used in <code>draw_line</code>.</p>
+
+<h3>draw_circle</h3>
+
+<p>All eight pixel plots call <code>set_pixel</code>, so B and C (the y and x inputs) must be reloaded before each call. The centre coordinates and the current x/y offsets are kept in memory. The constraint is that centre ± radius must stay within the screen boundary (0–255 in x, 0–191 in y); checking this is the caller's responsibility.</p>
+
+<pre><code><span class="comment">; draw_circle</span>
+<span class="comment">; Draw a circle using the midpoint algorithm.</span>
+<span class="comment">; Input:  B = cy  (centre y, 0-191)</span>
+<span class="comment">;         C = cx  (centre x, 0-255)</span>
+<span class="comment">;         D = radius  (must keep centre +/- radius within screen bounds)</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="comment">; Limitation: dc_d is a single signed byte. For radius &gt; 129 the initial</span>
+<span class="comment">;             value 1-radius underflows, producing an incorrect circle.</span>
+<span class="comment">;             For typical Spectrum use (radius &lt;= 95) this is not a concern.</span>
+<span class="label">draw_circle</span>:
+    <span class="keyword">LD</span>   A, B
+    <span class="keyword">LD</span>   (<span class="label">dc_cy</span>), A        <span class="comment">; save centre y</span>
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">LD</span>   (<span class="label">dc_cx</span>), A        <span class="comment">; save centre x</span>
+    <span class="keyword">LD</span>   A, D              <span class="comment">; radius</span>
+    <span class="keyword">LD</span>   (<span class="label">dc_y</span>),  A        <span class="comment">; y offset starts at radius</span>
+    <span class="keyword">XOR</span>  A
+    <span class="keyword">LD</span>   (<span class="label">dc_x</span>),  A        <span class="comment">; x offset starts at 0</span>
+
+    <span class="comment">; d = 1 - radius</span>
+    <span class="keyword">LD</span>   A, <span class="number">1</span>
+    <span class="keyword">SUB</span>  D
+    <span class="keyword">LD</span>   (<span class="label">dc_d</span>),  A
+
+<span class="label">dc_loop</span>:
+    <span class="comment">; while x &lt;= y</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">CP</span>   B                 <span class="comment">; y - x: if x &gt; y, done</span>
+    <span class="keyword">JR</span>   C, dc_done        <span class="comment">; carry set means y &lt; x</span>
+
+    <span class="comment">; plot 8 symmetric pixels</span>
+    <span class="keyword">CALL</span> dc_plot8
+
+    <span class="comment">; x += 1</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">INC</span>  A
+    <span class="keyword">LD</span>   (<span class="label">dc_x</span>), A
+
+    <span class="comment">; if d &lt; 0: d += 2*x + 1</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_d</span>)
+    <span class="keyword">OR</span> A
+    <span class="keyword">JP</span>   M, dc_d_neg
+
+<span class="comment">; d &gt;= 0: d += 2*(x-y) + 1,  y -= 1</span>
+    <span class="keyword">LD</span>   B, A              <span class="comment">; save d</span>
+
+    <span class="comment">; Update Y first</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">DEC</span>  A
+    <span class="keyword">LD</span>   (<span class="label">dc_y</span>), A         <span class="comment">; y -= 1</span>
+    <span class="keyword">LD</span>   D, A              <span class="comment">; D = new y</span>
+
+    <span class="comment">; Calculate 2*(x-y) + 1</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)         <span class="comment">; A = new x</span>
+    <span class="keyword">SUB</span>  D                 <span class="comment">; A = x - y</span>
+    <span class="keyword">ADD</span>  A, A              <span class="comment">; 2*(x - y)</span>
+    <span class="keyword">INC</span>  A                 <span class="comment">; 2*(x - y) + 1</span>
+    <span class="keyword">ADD</span>  A, B              <span class="comment">; d += 2*(x-y) + 1</span>
+    <span class="keyword">LD</span>   (<span class="label">dc_d</span>), A
+    <span class="keyword">JR</span>   dc_loop
+
+<span class="label">dc_d_neg</span>:
+    <span class="comment">; d += 2*x + 1</span>
+    <span class="keyword">LD</span>   B, A              <span class="comment">; save d</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">ADD</span>  A, A              <span class="comment">; 2*x</span>
+    <span class="keyword">INC</span>  A                 <span class="comment">; 2*x + 1</span>
+    <span class="keyword">ADD</span>  A, B              <span class="comment">; d += 2*x + 1</span>
+    <span class="keyword">LD</span>   (<span class="label">dc_d</span>), A
+    <span class="keyword">JR</span>   dc_loop
+
+<span class="label">dc_done</span>:
+    <span class="keyword">RET</span>
+
+<span class="comment">; dc_plot8 -- plot the 8 symmetric pixels for current (x, y) offsets</span>
+<span class="comment">; set_pixel destroys all registers, so dc_x and dc_y are reloaded from</span>
+<span class="comment">; memory before every pixel. D = x offset, E = y offset throughout.</span>
+<span class="label">dc_plot8</span>:
+    <span class="comment">; (cx+x, cy+y)</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">ADD</span>  A, E
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">ADD</span>  A, D
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">CALL</span> set_pixel
+
+    <span class="comment">; (cx-x, cy+y)</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">ADD</span>  A, E
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">SUB</span>  D
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">CALL</span> set_pixel
+
+    <span class="comment">; (cx+x, cy-y)</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">SUB</span>  E
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">ADD</span>  A, D
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">CALL</span> set_pixel
+
+    <span class="comment">; (cx-x, cy-y)</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">SUB</span>  E
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">SUB</span>  D
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">CALL</span> set_pixel
+
+    <span class="comment">; (cx+y, cy+x)  -- x and y roles swap</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">ADD</span>  A, D
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">ADD</span>  A, E
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">CALL</span> set_pixel
+
+    <span class="comment">; (cx-y, cy+x)</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">ADD</span>  A, D
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">SUB</span>  E
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">CALL</span> set_pixel
+
+    <span class="comment">; (cx+y, cy-x)</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">SUB</span>  D
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">ADD</span>  A, E
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">CALL</span> set_pixel
+
+    <span class="comment">; (cx-y, cy-x)</span>
+    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   D, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">SUB</span>  D
+    <span class="keyword">LD</span>   B, A
+    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">SUB</span>  E
+    <span class="keyword">LD</span>   C, A
+    <span class="keyword">CALL</span> set_pixel
+
+    <span class="keyword">RET</span>
+
+<span class="label">dc_cx</span>: <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; centre x</span>
+<span class="label">dc_cy</span>: <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; centre y</span>
+<span class="label">dc_x</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; current x offset (0 -&gt; radius)</span>
+<span class="label">dc_y</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; current y offset (radius -&gt; 0)</span>
+<span class="label">dc_d</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; decision variable</span></code></pre>
+
+<p>Save this as <strong>draw_circle.asm</strong>. It requires <code>set_pixel.asm</code> and <code>calc_pixel_addr.asm</code>.</p>
+
+<p>The helper <code>dc_plot8</code> is not a general routine — it is an internal subroutine of <code>draw_circle</code> and should not be called from outside. Because <code>dc_done</code> is a <code>RET</code>, execution never falls into <code>dc_plot8</code> by accident; it is only reached by the explicit <code>CALL dc_plot8</code> inside the loop.</p>
+
+<p><code>set_pixel</code> destroys every register, so all four values needed per pixel — <code>dc_x</code>, <code>dc_y</code>, <code>dc_cy</code>, and <code>dc_cx</code> — are reloaded from memory before every one of the eight pixel calculations. Four loads per pixel across eight pixels equals thirty-two memory reads per call to <code>dc_plot8</code>. That is the cost of having no free registers to keep any of these values alive across <code>set_pixel</code> calls.</p>
+
+<p><strong>Limitation:</strong> <code>dc_d</code> is a single signed byte. The initial value <code>1&nbsp;&minus;&nbsp;radius</code> is stored as 8-bit two's complement, which holds values from &minus;128 to +127. For radius&nbsp;&gt;&nbsp;129, <code>1&nbsp;&minus;&nbsp;radius</code> underflows to a positive value, causing the <code>JP M</code> branch to take the wrong path and producing an incorrect circle. For typical Spectrum screen usage (radius&nbsp;&le;&nbsp;95, keeping the circle within the 192-pixel screen height) this limit is never reached.</p>
+
+<h2 id="5-filling">Flood Fill</h2>
+
+<p>Flood fill starts from a seed pixel and spreads to all connected unset pixels, setting each one. The simplest version is <strong>4-connected</strong>: from each pixel, the fill spreads to the four orthogonal neighbours (up, down, left, right) but not diagonally.</p>
+
+<p>The natural implementation is recursive: set the current pixel, then recurse to each unset neighbour. On the Z80 each recursive call pushes at least the return address (2 bytes) plus any saved registers — roughly 10 bytes per call. Filling a 30×30 area can push the call stack hundreds of frames deep, consuming several kilobytes. This is safe when filling small enclosed areas such as icon backgrounds or HUD boxes. Do not use recursive flood fill on large open areas.</p>
+
+<pre><code><span class="comment">; flood_fill</span>
+<span class="comment">; 4-connected flood fill from a seed pixel.</span>
+<span class="comment">; Input:  B = y  (0–191)</span>
+<span class="comment">;         C = x  (0–255)</span>
+<span class="comment">; Fills all unset pixels reachable from (x,y) by 4-connectivity.</span>
+<span class="comment">; Warning: stack depth grows with fill area. Safe for small regions only.</span>
+<span class="comment">; Destroys: A, B, C, H, L (and uses stack heavily)</span>
+<span class="label">flood_fill</span>:
+    <span class="comment">; bounds check: stay within 0–255 x, 0–191 y</span>
+    <span class="keyword">LD</span>   A, B
+    <span class="keyword">CP</span>   <span class="number">192</span>
+    <span class="keyword">RET</span>  NC               <span class="comment">; y >= 192: off screen</span>
+
+    <span class="comment">; check if pixel is already set — if so, stop</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">CALL</span> calc_pixel_addr   <span class="comment">; HL = byte addr, A = bitmask</span>
+    <span class="keyword">LD</span>   B, A              <span class="comment">; save bitmask</span>
+    <span class="keyword">AND</span>  (HL)              <span class="comment">; test pixel</span>
+    <span class="keyword">JR</span>   NZ, ff_already_set
+
+    <span class="comment">; set the pixel</span>
+    <span class="keyword">LD</span>   A, B
+    <span class="keyword">OR</span>   (HL)
+    <span class="keyword">LD</span>   (HL), A
+
+    <span class="keyword">POP</span>  BC                <span class="comment">; restore y=B, x=C</span>
+
+    <span class="comment">; recurse: up (y-1)</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">DEC</span>  B
+    <span class="keyword">CALL</span> flood_fill
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; recurse: down (y+1)</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">INC</span>  B
+    <span class="keyword">CALL</span> flood_fill
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; recurse: left (x-1)</span>
+    <span class="keyword">PUSH</span> BC
+    <span class="keyword">DEC</span>  C
+    <span class="keyword">CALL</span> flood_fill
+    <span class="keyword">POP</span>  BC
+
+    <span class="comment">; recurse: right (x+1)</span>
+    <span class="keyword">INC</span>  C
+    <span class="keyword">JP</span>   flood_fill        <span class="comment">; tail call — no PUSH/POP needed for last branch</span>
+
+<span class="label">ff_already_set</span>:
+    <span class="keyword">POP</span>  BC
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>flood_fill.asm</strong>. It requires <code>calc_pixel_addr.asm</code>.</p>
+
+<p>The final recursive call (right neighbour) is a <strong>tail call</strong> — <code>flood_fill</code> has nothing left to do after it returns. Replacing <code>CALL flood_fill / RET</code> with <code>JP flood_fill</code> eliminates one stack frame for every right-moving step, slightly reducing peak stack depth.</p>
+
+<p>The y&nbsp;&ge;&nbsp;192 bounds check at the entry prevents going off the bottom of the screen. There is no x bounds check: x is an 8-bit register, so incrementing past 255 wraps to 0, and decrementing below 0 wraps to 255 — both of which land on valid (if distant) screen pixels. In practice, a correctly drawn enclosing border stops the fill before it reaches the edge.</p>
+
+<h2 id="5-example-hollow-rect">Example: Hollow Rectangle</h2>
+
+<p>This program draws a single hollow rectangle. The four register pairs set the top-left and bottom-right corners; <code>draw_rect</code> calls <code>draw_hline</code> and <code>draw_vline</code> to draw the four edges.</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="comment">; Hollow rectangle — top-left (20, 30), bottom-right (80, 210)</span>
+    <span class="keyword">LD</span>   B, <span class="number">20</span>             <span class="comment">; y1 (top)</span>
+    <span class="keyword">LD</span>   C, <span class="number">30</span>             <span class="comment">; x1 (left)</span>
+    <span class="keyword">LD</span>   D, <span class="number">80</span>             <span class="comment">; y2 (bottom)</span>
+    <span class="keyword">LD</span>   E, <span class="number">210</span>            <span class="comment">; x2 (right)</span>
+    <span class="keyword">CALL</span> draw_rect
+
+    <span class="keyword">EI</span>
+<span class="label">.done</span>:
+    <span class="keyword">HALT</span>
+    <span class="keyword">JR</span>   .done
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"set_pixel.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_hline.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_vline.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_rect.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas hollow_rect.asm hollow_rect.tap</code>. You will see an empty rectangular outline: two horizontal edges and two vertical edges meeting cleanly at the corners. The interior pixels are untouched.</p>
+
+<h2 id="5-example-filled-rect">Example: Filled Rectangle</h2>
+
+<p>This program draws a solid filled rectangle. The same four register pairs set the corners; <code>fill_rect</code> sweeps a horizontal line down through every row from y1 to y2.</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="comment">; Filled rectangle — top-left (40, 60), bottom-right (100, 190)</span>
+    <span class="keyword">LD</span>   B, <span class="number">40</span>             <span class="comment">; y1 (top)</span>
+    <span class="keyword">LD</span>   C, <span class="number">60</span>             <span class="comment">; x1 (left)</span>
+    <span class="keyword">LD</span>   D, <span class="number">100</span>            <span class="comment">; y2 (bottom)</span>
+    <span class="keyword">LD</span>   E, <span class="number">190</span>            <span class="comment">; x2 (right)</span>
+    <span class="keyword">CALL</span> fill_rect
+
+    <span class="keyword">EI</span>
+<span class="label">.done</span>:
+    <span class="keyword">HALT</span>
+    <span class="keyword">JR</span>   .done
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"set_pixel.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_hline.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"fill_rect.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas filled_rect.asm filled_rect.tap</code>. You will see a solid white block. The middle columns of each row are written as whole bytes (eight pixels at once), making this the fastest shape to draw per pixel on the Spectrum.</p>
+
+<h2 id="5-example-circle">Example: Circle</h2>
+
+<p>This program draws a single hollow circle using the midpoint algorithm. B holds the centre y, C the centre x, and D the radius. Centre ± radius must stay within the screen boundary — the values below give a circle well clear of all four edges.</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="comment">; Hollow circle — centre (95, 127), radius 50</span>
+    <span class="keyword">LD</span>   B, <span class="number">95</span>             <span class="comment">; cy (centre y)</span>
+    <span class="keyword">LD</span>   C, <span class="number">127</span>            <span class="comment">; cx (centre x)</span>
+    <span class="keyword">LD</span>   D, <span class="number">50</span>             <span class="comment">; radius</span>
+    <span class="keyword">CALL</span> draw_circle
+
+    <span class="keyword">EI</span>
+<span class="label">.done</span>:
+    <span class="keyword">HALT</span>
+    <span class="keyword">JR</span>   .done
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"set_pixel.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_circle.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas circle.asm circle.tap</code>. You will see a thin circular outline near the centre of the screen. The interior pixels are clear. The algorithm plots eight symmetric pixels per step, so the circle is always drawn in one pass regardless of radius size.</p>
+
+<h2 id="5-example-filled-circle">Example: Filled Circle</h2>
+
+<p>A filled circle requires two steps: draw the outline with <code>draw_circle</code> to create a closed border, then seed <code>flood_fill</code> at the centre. The flood fill follows the four-neighbour rule and stops at every set pixel — which is exactly the outline just drawn. Keep the radius small: the recursive fill uses approximately 10 bytes of stack per pixel visited, so a radius of 15 gives a 30-pixel-diameter interior of roughly 700 pixels, well within safe limits.</p>
+
+<pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main</span>:
+    <span class="comment">; Step 1 — draw the circle outline</span>
+    <span class="comment">; Centre (95, 127), radius 15  (interior ~700 pixels, safe stack depth)</span>
+    <span class="keyword">LD</span>   B, <span class="number">95</span>             <span class="comment">; cy</span>
+    <span class="keyword">LD</span>   C, <span class="number">127</span>            <span class="comment">; cx</span>
+    <span class="keyword">LD</span>   D, <span class="number">15</span>             <span class="comment">; radius</span>
+    <span class="keyword">CALL</span> draw_circle
+
+    <span class="comment">; Step 2 — flood-fill from the centre (guaranteed interior pixel)</span>
+    <span class="keyword">LD</span>   B, <span class="number">95</span>             <span class="comment">; seed y = cy</span>
+    <span class="keyword">LD</span>   C, <span class="number">127</span>            <span class="comment">; seed x = cx</span>
+    <span class="keyword">CALL</span> flood_fill
+
+    <span class="keyword">EI</span>
+<span class="label">.done</span>:
+    <span class="keyword">HALT</span>
+    <span class="keyword">JR</span>   .done
+
+    <span class="directive">INCLUDE</span> <span class="string">"calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"set_pixel.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"draw_circle.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"flood_fill.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Assemble with <code>pasmo --tapbas filled_circle.asm filled_circle.tap</code>. You will see a solid white disc. Seeding at the exact centre is reliable because the centre coordinate is always interior for any radius greater than zero. The fill works because <code>draw_circle</code> produces a fully closed border with no gaps — the eight-fold symmetry of the midpoint algorithm guarantees this for all integer radii.</p>
+
+<p class="bold-text">Key fact: shape routines are wrappers around line routines. A rectangle is four line calls. A filled rectangle is a loop of horizontal line calls. A circle plots 8 pixels per step using the same integer decision-variable technique as Bresenham's line. Each layer of abstraction adds no new Z80 instructions — only new ways to organise calls to the primitives already built.</p>
+
+</section>
+
+<section style="text-align:center;padding:2rem 0;border-bottom:none;">
+<p style="color:var(--text-dim);font-size:1.1rem;">Part 1 ends here.</p>
+<p style="margin-top:0.8rem;"><a href="z80_graphics_part2.html" style="font-size:1.1rem;">Continue to Part 2: Advanced Topics &rarr;</a></p>
+</section>
+
+</body>
+</html>
