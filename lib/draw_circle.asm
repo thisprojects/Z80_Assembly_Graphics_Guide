@@ -4,9 +4,7 @@
 ;         C = cx  (centre x, 0-255)
 ;         D = radius  (must keep centre +/- radius within screen bounds)
 ; Destroys: A, B, C, D, E, H, L
-; Limitation: dc_d is a single signed byte. For radius > 129 the initial
-;             value 1-radius underflows, producing an incorrect circle.
-;             For typical Spectrum use (radius <= 95) this is not a concern.
+; The decision variable is 16-bit, so any radius up to 255 is handled.
 draw_circle:
     LD   A, B
     LD   (dc_cy), A        ; save centre y
@@ -17,10 +15,13 @@ draw_circle:
     XOR  A
     LD   (dc_x),  A        ; x offset starts at 0
 
-    ; d = 1 - radius
-    LD   A, 1
-    SUB  D
-    LD   (dc_d),  A
+    ; d = 1 - radius  (16-bit signed)
+    LD   E, D
+    LD   D, 0
+    LD   HL, 1
+    OR   A
+    SBC  HL, DE
+    LD   (dc_d),  HL
 
 dc_loop:
     ; while x <= y
@@ -39,36 +40,37 @@ dc_loop:
     LD   (dc_x), A
 
     ; if d < 0: d += 2*x + 1
-    LD   A, (dc_d)
-    OR A
-    JP   M, dc_d_neg
+    LD   HL, (dc_d)
+    BIT  7, H
+    JR   NZ, dc_d_neg
 
-; d >= 0: d += 2*(x-y) + 1,  y -= 1
-    LD   B, A              ; save d
-
-    ; Update Y first
+    ; d >= 0: y -= 1,  d += 2*(x-y) + 1
     LD   A, (dc_y)
     DEC  A
     LD   (dc_y), A         ; y -= 1
-    LD   D, A              ; D = new y
-
-    ; Calculate 2*(x-y) + 1
-    LD   A, (dc_x)         ; A = new x
-    SUB  D                 ; A = x - y
-    ADD  A, A              ; 2*(x - y)
-    INC  A                 ; 2*(x - y) + 1
-    ADD  A, B              ; d += 2*(x-y) + 1
-    LD   (dc_d), A
+    LD   E, A
+    LD   D, 0              ; DE = new y
+    LD   A, (dc_x)
+    LD   L, A
+    LD   H, 0              ; HL = new x
+    OR   A
+    SBC  HL, DE            ; HL = x - y  (16-bit signed)
+    ADD  HL, HL            ; 2*(x - y)
+    INC  HL                ; 2*(x - y) + 1
+    LD   DE, (dc_d)
+    ADD  HL, DE            ; d += 2*(x-y) + 1
+    LD   (dc_d), HL
     JR   dc_loop
 
 dc_d_neg:
-    ; d += 2*x + 1
-    LD   B, A              ; save d
+    ; HL = d;  d += 2*x + 1
     LD   A, (dc_x)
-    ADD  A, A              ; 2*x
-    INC  A                 ; 2*x + 1
-    ADD  A, B              ; d += 2*x + 1
-    LD   (dc_d), A
+    LD   E, A
+    LD   D, 0
+    ADD  HL, DE
+    ADD  HL, DE            ; + 2*x
+    INC  HL                ; + 1
+    LD   (dc_d), HL
     JR   dc_loop
 
 dc_done:
@@ -188,4 +190,4 @@ dc_cx: DB 0   ; centre x
 dc_cy: DB 0   ; centre y
 dc_x:  DB 0   ; current x offset (0 -> radius)
 dc_y:  DB 0   ; current y offset (radius -> 0)
-dc_d:  DB 0   ; decision variable
+dc_d:  DW 0   ; decision variable (16-bit signed)

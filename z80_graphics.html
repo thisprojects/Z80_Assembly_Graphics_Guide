@@ -1416,136 +1416,131 @@ tr.highlight-row {
 
 <p>The Z80 has no instruction to add or subtract a memory-addressed value directly to A except via <code>(HL)</code>. Instructions like <code>ADD A, (addr)</code> and <code>SUB (addr)</code> are not valid. Every memory operand must be loaded into a register first: <code>LD B, A</code> to save A, then <code>LD A, (addr)</code>, then <code>ADD A, B</code>. Bresenham requires several such operations, which is why the routine stores all working state in named memory variables and loads them explicitly as needed.</p>
 
-<p>A second constraint: with 8-bit signed arithmetic, the error variable fits in a byte only when <code>dx</code> and <code>dy</code> are each at most 63. Longer diagonals require 16-bit error tracking; <code>draw_line</code> as written works correctly for lines up to 63 pixels in each dimension — sufficient for most game sprites and HUD elements.</p>
+<p>A second point: the error variable is a <strong>16-bit</strong> value held in <code>HL</code> and stored in the two-byte <code>dl_err</code>. An 8-bit error is not enough: the intermediate values <code>2*err + dy</code> and <code>2*err - dx</code> can exceed the signed-byte range of &minus;128 to +127 for quite modest lines (dx&nbsp;=&nbsp;40, dy&nbsp;=&nbsp;63 is enough), and a wrapped comparison makes the routine skip a step forever and hang. With 16-bit arithmetic every line that fits on the screen is handled correctly.</p>
 
 <pre><code><span class="comment">; draw_line</span>
 <span class="comment">; Draw a line from (x1,y1) to (x2,y2) using Bresenham's algorithm.</span>
 <span class="comment">; Input:  B = y1  (0–191)    C = x1  (0–255)</span>
 <span class="comment">;         D = y2  (0–191)    E = x2  (0–255)</span>
-<span class="comment">; Constraint: |x2-x1| and |y2-y1| must each be at most 63.</span>
+<span class="comment">; The error term is 16-bit, so any line on the screen is handled.</span>
 <span class="comment">; Output: none    Destroys: A, B, C, D, E, H, L</span>
 <span class="label">draw_line</span>:
     <span class="keyword">LD</span>   A, C
-    <span class="keyword">LD</span>   (<span class="label">dl_x</span>),  A         <span class="comment">; x = x1</span>
+    <span class="keyword">LD</span>   (dl_x),  A         <span class="comment">; x = x1</span>
     <span class="keyword">LD</span>   A, B
-    <span class="keyword">LD</span>   (<span class="label">dl_y</span>),  A         <span class="comment">; y = y1</span>
+    <span class="keyword">LD</span>   (dl_y),  A         <span class="comment">; y = y1</span>
     <span class="keyword">LD</span>   A, E
-    <span class="keyword">LD</span>   (<span class="label">dl_x2</span>), A         <span class="comment">; target x2</span>
+    <span class="keyword">LD</span>   (dl_x2), A         <span class="comment">; target x2</span>
     <span class="keyword">LD</span>   A, D
-    <span class="keyword">LD</span>   (<span class="label">dl_y2</span>), A         <span class="comment">; target y2</span>
+    <span class="keyword">LD</span>   (dl_y2), A         <span class="comment">; target y2</span>
 
     <span class="comment">; dx = |x2-x1|,  sx = +1 or $FF (-1)</span>
+    <span class="comment">; Compare with CP so the full 0–255 range is handled without sign issues.</span>
     <span class="keyword">LD</span>   A, E
-    <span class="keyword">SUB</span>  C                  <span class="comment">; A = x2 - x1 (signed)</span>
-    <span class="keyword">JP</span>   P, .dx_pos
+    <span class="keyword">SUB</span>  C                  <span class="comment">; A = x2 - x1, carry set if x2 &lt; x1</span>
+    <span class="keyword">JR</span>   NC, .dx_pos
     <span class="keyword">NEG</span>                     <span class="comment">; make positive for dx</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_dx</span>), A
+    <span class="keyword">LD</span>   (dl_dx), A
     <span class="keyword">LD</span>   A, <span class="number">$FF</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_sx</span>), A          <span class="comment">; sx = $FF (-1): moving left</span>
+    <span class="keyword">LD</span>   (dl_sx), A         <span class="comment">; sx = $FF (-1): moving left</span>
     <span class="keyword">JR</span>   .dy_calc
 <span class="label">.dx_pos</span>:
-    <span class="keyword">LD</span>   (<span class="label">dl_dx</span>), A
+    <span class="keyword">LD</span>   (dl_dx), A
     <span class="keyword">LD</span>   A, <span class="number">1</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_sx</span>), A          <span class="comment">; sx = 1: moving right</span>
+    <span class="keyword">LD</span>   (dl_sx), A         <span class="comment">; sx = 1: moving right</span>
 
 <span class="label">.dy_calc</span>:
     <span class="comment">; dy = |y2-y1|,  sy = +1 or $FF (-1)</span>
     <span class="keyword">LD</span>   A, D
-    <span class="keyword">SUB</span>  B                  <span class="comment">; A = y2 - y1 (signed)</span>
-    <span class="keyword">JP</span>   P, .dy_pos
+    <span class="keyword">SUB</span>  B                  <span class="comment">; A = y2 - y1, carry set if y2 &lt; y1</span>
+    <span class="keyword">JR</span>   NC, .dy_pos
     <span class="keyword">NEG</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_dy</span>), A
+    <span class="keyword">LD</span>   (dl_dy), A
     <span class="keyword">LD</span>   A, <span class="number">$FF</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_sy</span>), A          <span class="comment">; sy = $FF (-1): moving up</span>
+    <span class="keyword">LD</span>   (dl_sy), A         <span class="comment">; sy = $FF (-1): moving up</span>
     <span class="keyword">JR</span>   .err_calc
 <span class="label">.dy_pos</span>:
-    <span class="keyword">LD</span>   (<span class="label">dl_dy</span>), A
+    <span class="keyword">LD</span>   (dl_dy), A
     <span class="keyword">LD</span>   A, <span class="number">1</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_sy</span>), A          <span class="comment">; sy = 1: moving down</span>
+    <span class="keyword">LD</span>   (dl_sy), A         <span class="comment">; sy = 1: moving down</span>
 
 <span class="label">.err_calc</span>:
-    <span class="comment">; err = dx - dy</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dl_dx</span>)
-    <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_dy</span>)
-    <span class="keyword">LD</span>   C, A
-    <span class="keyword">LD</span>   A, B
-    <span class="keyword">SUB</span>  C                  <span class="comment">; A = dx - dy</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_err</span>), A
+    <span class="comment">; err = dx - dy  (16-bit)</span>
+    <span class="keyword">LD</span>   A, (dl_dx)
+    <span class="keyword">LD</span>   L, A
+    <span class="keyword">LD</span>   H, <span class="number">0</span>
+    <span class="keyword">LD</span>   A, (dl_dy)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   D, <span class="number">0</span>
+    <span class="keyword">OR</span>   A                  <span class="comment">; clear carry for SBC</span>
+    <span class="keyword">SBC</span>  HL, DE
+    <span class="keyword">LD</span>   (dl_err), HL
 
 <span class="label">dl_loop</span>:
     <span class="comment">; — Draw pixel at (x, y) —</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dl_y</span>)
+    <span class="keyword">LD</span>   A, (dl_y)
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_x</span>)
+    <span class="keyword">LD</span>   A, (dl_x)
     <span class="keyword">LD</span>   C, A
-    <span class="keyword">PUSH</span> BC
     <span class="keyword">CALL</span> set_pixel
-    <span class="keyword">POP</span>  BC
 
     <span class="comment">; — Check if done: x==x2 and y==y2 —</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dl_x2</span>)
+    <span class="keyword">LD</span>   A, (dl_x2)
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_x</span>)
+    <span class="keyword">LD</span>   A, (dl_x)
     <span class="keyword">CP</span>   B
     <span class="keyword">JR</span>   NZ, dl_not_done
-    <span class="keyword">LD</span>   A, (<span class="label">dl_y2</span>)
+    <span class="keyword">LD</span>   A, (dl_y2)
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_y</span>)
+    <span class="keyword">LD</span>   A, (dl_y)
     <span class="keyword">CP</span>   B
-    <span class="keyword">JR</span>   Z, dl_done
+    <span class="keyword">RET</span>  Z
 <span class="label">dl_not_done</span>:
 
-    <span class="comment">; — e2 = 2 * err —</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dl_err</span>)
-    <span class="keyword">ADD</span>  A, A               <span class="comment">; e2 = err * 2 (left shift by 1)</span>
-    <span class="keyword">LD</span>   B, A               <span class="comment">; B = e2, preserved across both branch tests below</span>
+    <span class="comment">; — e2 = 2 * err  (16-bit) —</span>
+    <span class="keyword">LD</span>   HL, (dl_err)
+    <span class="keyword">ADD</span>  HL, HL
+    <span class="keyword">PUSH</span> HL                 <span class="comment">; keep e2 for the second test</span>
 
-    <span class="comment">; — if e2 > -dy: err -= dy;  x += sx —</span>
-    <span class="comment">; Test: dy + e2 > 0  ↔  e2 > -dy</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dl_dy</span>)
-    <span class="keyword">ADD</span>  A, B               <span class="comment">; A = dy + e2</span>
-    <span class="keyword">JR</span>   Z, dl_skip_x       <span class="comment">; e2 == -dy: condition false</span>
-    <span class="keyword">JP</span>   M, dl_skip_x       <span class="comment">; e2 &lt; -dy: condition false</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dl_err</span>)
+    <span class="comment">; — if e2 + dy &gt; 0 (i.e. e2 &gt; -dy): err -= dy;  x += sx —</span>
+    <span class="keyword">LD</span>   A, (dl_dy)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   D, <span class="number">0</span>
+    <span class="keyword">ADD</span>  HL, DE             <span class="comment">; HL = e2 + dy</span>
+    <span class="keyword">BIT</span>  <span class="number">7</span>, H
+    <span class="keyword">JR</span>   NZ, dl_skip_x      <span class="comment">; negative: condition false</span>
+    <span class="keyword">LD</span>   A, H
+    <span class="keyword">OR</span>   L
+    <span class="keyword">JR</span>   Z, dl_skip_x       <span class="comment">; zero: condition false</span>
+    <span class="keyword">LD</span>   HL, (dl_err)
+    <span class="keyword">OR</span>   A
+    <span class="keyword">SBC</span>  HL, DE             <span class="comment">; err -= dy  (DE still holds dy)</span>
+    <span class="keyword">LD</span>   (dl_err), HL
+    <span class="keyword">LD</span>   A, (dl_x)
     <span class="keyword">LD</span>   C, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_dy</span>)
-    <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, C
-    <span class="keyword">SUB</span>  D                  <span class="comment">; err -= dy  (load dy to D, subtract from err in C)</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_err</span>), A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_x</span>)
-    <span class="keyword">LD</span>   C, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_sx</span>)
+    <span class="keyword">LD</span>   A, (dl_sx)
     <span class="keyword">ADD</span>  A, C               <span class="comment">; x += sx  ($FF + x = x - 1 in 8-bit arithmetic)</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_x</span>), A
+    <span class="keyword">LD</span>   (dl_x), A
 <span class="label">dl_skip_x</span>:
 
-    <span class="comment">; — if e2 &lt; dx: err += dx;  y += sy —</span>
-    <span class="comment">; Test: e2 - dx &lt; 0  ↔  e2 &lt; dx</span>
-    <span class="keyword">LD</span>   A, B               <span class="comment">; restore e2 (B unchanged since we saved it)</span>
+    <span class="comment">; — if e2 - dx &lt; 0 (i.e. e2 &lt; dx): err += dx;  y += sy —</span>
+    <span class="keyword">POP</span>  HL                 <span class="comment">; HL = e2</span>
+    <span class="keyword">LD</span>   A, (dl_dx)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   D, <span class="number">0</span>
+    <span class="keyword">OR</span>   A
+    <span class="keyword">SBC</span>  HL, DE             <span class="comment">; HL = e2 - dx</span>
+    <span class="keyword">BIT</span>  <span class="number">7</span>, H
+    <span class="keyword">JR</span>   Z, dl_loop         <span class="comment">; non-negative: condition false</span>
+    <span class="keyword">LD</span>   HL, (dl_err)
+    <span class="keyword">ADD</span>  HL, DE             <span class="comment">; err += dx  (DE still holds dx)</span>
+    <span class="keyword">LD</span>   (dl_err), HL
+    <span class="keyword">LD</span>   A, (dl_y)
     <span class="keyword">LD</span>   C, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_dx</span>)
-    <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, C
-    <span class="keyword">SUB</span>  D                  <span class="comment">; A = e2 - dx</span>
-    <span class="keyword">JP</span>   P, dl_skip_y       <span class="comment">; positive or zero: e2 >= dx, condition false</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dl_err</span>)
-    <span class="keyword">LD</span>   C, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_dx</span>)
-    <span class="keyword">ADD</span>  A, C               <span class="comment">; err += dx</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_err</span>), A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_y</span>)
-    <span class="keyword">LD</span>   C, A
-    <span class="keyword">LD</span>   A, (<span class="label">dl_sy</span>)
+    <span class="keyword">LD</span>   A, (dl_sy)
     <span class="keyword">ADD</span>  A, C               <span class="comment">; y += sy</span>
-    <span class="keyword">LD</span>   (<span class="label">dl_y</span>), A
-<span class="label">dl_skip_y</span>:
-
+    <span class="keyword">LD</span>   (dl_y), A
     <span class="keyword">JR</span>   dl_loop
-
-<span class="label">dl_done</span>:
-    <span class="keyword">RET</span>
 
 <span class="label">dl_x</span>:   <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; current x</span>
 <span class="label">dl_y</span>:   <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; current y</span>
@@ -1555,13 +1550,13 @@ tr.highlight-row {
 <span class="label">dl_dy</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; |y2-y1|</span>
 <span class="label">dl_sx</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; x step: 1 or $FF</span>
 <span class="label">dl_sy</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; y step: 1 or $FF</span>
-<span class="label">dl_err</span>: <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; Bresenham error accumulator</span></code></pre>
+<span class="label">dl_err</span>: <span class="directive">DW</span> <span class="number">0</span>   <span class="comment">; Bresenham error accumulator (16-bit signed)</span></code></pre>
 
 <p>Save this as <strong>draw_line.asm</strong>. Any program using it must also <code>INCLUDE "calc_pixel_addr.asm"</code> and <code>INCLUDE "set_pixel.asm"</code>.</p>
 
 <p>Every memory load follows the same pattern: <code>LD A, (addr)</code> to get the value into A, then <code>LD reg, A</code> to move it to a working register, leaving A free for the arithmetic. This is the only way to operate on memory-resident values on the Z80 — there is no <code>ADD A, (addr)</code> instruction.</p>
 
-<p><strong>JP P / JP M</strong> — Jump if Positive / Jump if Minus. These branch on the Sign flag, which reflects the most significant bit of the last arithmetic result. A result with bit 7 set is treated as negative in two's complement; <code>JP M</code> jumps if that bit is set, <code>JP P</code> jumps if it is clear. Bresenham's comparisons must be signed because the error accumulator represents a signed difference.</p>
+<p><strong>BIT 7, H</strong> — The error is a 16-bit signed number, so its sign is bit 7 of the high byte. <code>BIT 7, H</code> sets the Zero flag when that bit is clear (the value is non-negative) and clears it when the bit is set (negative). Both Bresenham comparisons are signed because the error accumulator represents a signed difference; testing a 16-bit result this way cannot be fooled by 8-bit overflow, which is exactly what a <code>JP P</code> / <code>JP M</code> test on an 8-bit result can be.</p>
 
 <p>The <code>dl_x</code>, <code>dl_y</code> and companion variables at the end of the routine are writable working storage, not constants. The routine overwrites them on every call. This means <code>draw_line.asm</code> must be assembled into RAM — it cannot be placed in ROM. For a <code>pasmo --tapbas</code> program loaded at <code>$8000</code> this is always the case.</p>
 
@@ -1611,7 +1606,7 @@ tr.highlight-row {
 
     <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
 
-<p>Assemble with <code>pasmo --tapbas diagonals.asm diagonals.tap</code>. Four lines radiate from near the screen centre, forming an X. Each line spans exactly 60 pixels in both x and y — well within the 63-pixel per-axis constraint, so the 8-bit error accumulator does not overflow.</p>
+<p>Assemble with <code>pasmo --tapbas diagonals.asm diagonals.tap</code>. Four lines radiate from near the screen centre, forming an X. Each line spans exactly 60 pixels in both x and y; because the error accumulator is 16-bit, there is no limit on line length other than the screen itself.</p>
 
 <h2 id="4-border">A Screen Border</h2>
 
@@ -1681,8 +1676,8 @@ tr.highlight-row {
 <span class="comment">; Draw a hollow rectangle.</span>
 <span class="comment">; Input:  B = y1  (0–191, top)</span>
 <span class="comment">;         C = x1  (0–255, left)</span>
-<span class="comment">;         D = y2  (0–191, bottom, must be >= y1)</span>
-<span class="comment">;         E = x2  (0–255, right,  must be >= x1)</span>
+<span class="comment">;         D = y2  (0–191, bottom, must be &gt;= y1)</span>
+<span class="comment">;         E = x2  (0–255, right,  must be &gt;= x1)</span>
 <span class="comment">; Destroys: A, B, C, D, E, H, L</span>
 <span class="label">draw_rect</span>:
     <span class="comment">; Top edge: y=y1, x1 to x2</span>
@@ -1702,10 +1697,13 @@ tr.highlight-row {
     <span class="keyword">POP</span>  DE
     <span class="keyword">POP</span>  BC
 
-    <span class="comment">; Skip vertical edges if height is 1 (y1 == y2)</span>
-    <span class="keyword">LD</span>   A, B
-    <span class="keyword">CP</span>   D                 <span class="comment">; y1 == y2?</span>
-    <span class="keyword">JR</span>   Z, dr_no_vert
+    <span class="comment">; Skip vertical edges if there are no interior rows (y2 - y1 &lt; 2).</span>
+    <span class="comment">; With height 1 or 2 the hlines already cover every row; calling</span>
+    <span class="comment">; draw_vline with y1+1 &gt; y2-1 would give a count of 0 and loop 256 times.</span>
+    <span class="keyword">LD</span>   A, D
+    <span class="keyword">SUB</span>  B                 <span class="comment">; y2 - y1</span>
+    <span class="keyword">CP</span>   <span class="number">2</span>
+    <span class="keyword">JR</span>   C, dr_no_vert
 
     <span class="comment">; Left edge: x=x1, y1+1 to y2-1</span>
     <span class="keyword">PUSH</span> BC
@@ -1726,7 +1724,7 @@ tr.highlight-row {
 
 <p>Save this as <strong>draw_rect.asm</strong>. It requires <code>draw_hline.asm</code>, <code>draw_vline.asm</code>, and <code>calc_pixel_addr.asm</code>.</p>
 
-<p>The PUSH/POP pairs preserve the original coordinates across each sub-call. <code>draw_hline</code> and <code>draw_vline</code> both destroy B, C, D — so the inputs must be saved before every call and restored before the next. The vertical edges run from y1+1 to y2-1 to avoid drawing the corners twice; with OR semantics this is a style choice rather than a correctness requirement. The <code>LD A, B / CP D / JR Z, .no_vert</code> guard before the vertical calls handles the degenerate case where y1&nbsp;==&nbsp;y2 — without it, the vertical calls would receive an inverted range (y1+1 &gt; y2-1) and produce undefined behaviour.</p>
+<p>The PUSH/POP pairs preserve the original coordinates across each sub-call. <code>draw_hline</code> and <code>draw_vline</code> both destroy B, C, D — so the inputs must be saved before every call and restored before the next. The vertical edges run from y1+1 to y2-1 to avoid drawing the corners twice; with OR semantics this is a style choice rather than a correctness requirement. The <code>LD A, D / SUB B / CP 2 / JR C, dr_no_vert</code> guard before the vertical calls handles the degenerate cases where the rectangle is only one or two rows tall (y2&nbsp;&minus;&nbsp;y1 is 0 or 1). The two horizontal edges already cover every row, and there is no interior to draw. Without the guard, the vertical calls would receive an empty or inverted range (y1+1 &gt; y2-1); <code>draw_vline</code> would compute a count of 0 and <code>DJNZ</code> would loop 256 times, scribbling over the display file and beyond.</p>
 
 <h3>Filled Rectangle</h3>
 
@@ -1812,7 +1810,7 @@ tr.highlight-row {
 <span class="comment">;   if d &lt; 0:  d += 2*x + 1</span>
 <span class="comment">;   else:      y -= 1 ;  d += 2*(x - y) + 1</span></code></pre>
 
-<p>On the Z80, <code>2*x</code> is <code>ADD A, A</code>. The signed comparison <code>d &lt; 0</code> tests the Sign flag after updating d — the same <code>JP M</code> technique used in <code>draw_line</code>.</p>
+<p>The decision variable <code>d</code> is a 16-bit signed value kept in <code>HL</code> and stored in the two-byte <code>dc_d</code>. On the Z80, <code>2*x</code> is <code>ADD HL, DE</code> done twice (or <code>ADD HL, HL</code> on an already-16-bit value). The test <code>d &lt; 0</code> is <code>BIT 7, H</code> — the same sign test used in <code>draw_line</code>. Note that <code>x - y</code> is computed in 16 bits too, so it stays correct when it goes negative.</p>
 
 <h3>draw_circle</h3>
 
@@ -1824,29 +1822,30 @@ tr.highlight-row {
 <span class="comment">;         C = cx  (centre x, 0-255)</span>
 <span class="comment">;         D = radius  (must keep centre +/- radius within screen bounds)</span>
 <span class="comment">; Destroys: A, B, C, D, E, H, L</span>
-<span class="comment">; Limitation: dc_d is a single signed byte. For radius &gt; 129 the initial</span>
-<span class="comment">;             value 1-radius underflows, producing an incorrect circle.</span>
-<span class="comment">;             For typical Spectrum use (radius &lt;= 95) this is not a concern.</span>
+<span class="comment">; The decision variable is 16-bit, so any radius up to 255 is handled.</span>
 <span class="label">draw_circle</span>:
     <span class="keyword">LD</span>   A, B
-    <span class="keyword">LD</span>   (<span class="label">dc_cy</span>), A        <span class="comment">; save centre y</span>
+    <span class="keyword">LD</span>   (dc_cy), A        <span class="comment">; save centre y</span>
     <span class="keyword">LD</span>   A, C
-    <span class="keyword">LD</span>   (<span class="label">dc_cx</span>), A        <span class="comment">; save centre x</span>
+    <span class="keyword">LD</span>   (dc_cx), A        <span class="comment">; save centre x</span>
     <span class="keyword">LD</span>   A, D              <span class="comment">; radius</span>
-    <span class="keyword">LD</span>   (<span class="label">dc_y</span>),  A        <span class="comment">; y offset starts at radius</span>
+    <span class="keyword">LD</span>   (dc_y),  A        <span class="comment">; y offset starts at radius</span>
     <span class="keyword">XOR</span>  A
-    <span class="keyword">LD</span>   (<span class="label">dc_x</span>),  A        <span class="comment">; x offset starts at 0</span>
+    <span class="keyword">LD</span>   (dc_x),  A        <span class="comment">; x offset starts at 0</span>
 
-    <span class="comment">; d = 1 - radius</span>
-    <span class="keyword">LD</span>   A, <span class="number">1</span>
-    <span class="keyword">SUB</span>  D
-    <span class="keyword">LD</span>   (<span class="label">dc_d</span>),  A
+    <span class="comment">; d = 1 - radius  (16-bit signed)</span>
+    <span class="keyword">LD</span>   E, D
+    <span class="keyword">LD</span>   D, <span class="number">0</span>
+    <span class="keyword">LD</span>   HL, <span class="number">1</span>
+    <span class="keyword">OR</span>   A
+    <span class="keyword">SBC</span>  HL, DE
+    <span class="keyword">LD</span>   (dc_d),  HL
 
 <span class="label">dc_loop</span>:
     <span class="comment">; while x &lt;= y</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">CP</span>   B                 <span class="comment">; y - x: if x &gt; y, done</span>
     <span class="keyword">JR</span>   C, dc_done        <span class="comment">; carry set means y &lt; x</span>
 
@@ -1854,41 +1853,42 @@ tr.highlight-row {
     <span class="keyword">CALL</span> dc_plot8
 
     <span class="comment">; x += 1</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">INC</span>  A
-    <span class="keyword">LD</span>   (<span class="label">dc_x</span>), A
+    <span class="keyword">LD</span>   (dc_x), A
 
     <span class="comment">; if d &lt; 0: d += 2*x + 1</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_d</span>)
-    <span class="keyword">OR</span> A
-    <span class="keyword">JP</span>   M, dc_d_neg
+    <span class="keyword">LD</span>   HL, (dc_d)
+    <span class="keyword">BIT</span>  <span class="number">7</span>, H
+    <span class="keyword">JR</span>   NZ, dc_d_neg
 
-<span class="comment">; d &gt;= 0: d += 2*(x-y) + 1,  y -= 1</span>
-    <span class="keyword">LD</span>   B, A              <span class="comment">; save d</span>
-
-    <span class="comment">; Update Y first</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="comment">; d &gt;= 0: y -= 1,  d += 2*(x-y) + 1</span>
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">DEC</span>  A
-    <span class="keyword">LD</span>   (<span class="label">dc_y</span>), A         <span class="comment">; y -= 1</span>
-    <span class="keyword">LD</span>   D, A              <span class="comment">; D = new y</span>
-
-    <span class="comment">; Calculate 2*(x-y) + 1</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)         <span class="comment">; A = new x</span>
-    <span class="keyword">SUB</span>  D                 <span class="comment">; A = x - y</span>
-    <span class="keyword">ADD</span>  A, A              <span class="comment">; 2*(x - y)</span>
-    <span class="keyword">INC</span>  A                 <span class="comment">; 2*(x - y) + 1</span>
-    <span class="keyword">ADD</span>  A, B              <span class="comment">; d += 2*(x-y) + 1</span>
-    <span class="keyword">LD</span>   (<span class="label">dc_d</span>), A
+    <span class="keyword">LD</span>   (dc_y), A         <span class="comment">; y -= 1</span>
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   D, <span class="number">0</span>              <span class="comment">; DE = new y</span>
+    <span class="keyword">LD</span>   A, (dc_x)
+    <span class="keyword">LD</span>   L, A
+    <span class="keyword">LD</span>   H, <span class="number">0</span>              <span class="comment">; HL = new x</span>
+    <span class="keyword">OR</span>   A
+    <span class="keyword">SBC</span>  HL, DE            <span class="comment">; HL = x - y  (16-bit signed)</span>
+    <span class="keyword">ADD</span>  HL, HL            <span class="comment">; 2*(x - y)</span>
+    <span class="keyword">INC</span>  HL                <span class="comment">; 2*(x - y) + 1</span>
+    <span class="keyword">LD</span>   DE, (dc_d)
+    <span class="keyword">ADD</span>  HL, DE            <span class="comment">; d += 2*(x-y) + 1</span>
+    <span class="keyword">LD</span>   (dc_d), HL
     <span class="keyword">JR</span>   dc_loop
 
 <span class="label">dc_d_neg</span>:
-    <span class="comment">; d += 2*x + 1</span>
-    <span class="keyword">LD</span>   B, A              <span class="comment">; save d</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
-    <span class="keyword">ADD</span>  A, A              <span class="comment">; 2*x</span>
-    <span class="keyword">INC</span>  A                 <span class="comment">; 2*x + 1</span>
-    <span class="keyword">ADD</span>  A, B              <span class="comment">; d += 2*x + 1</span>
-    <span class="keyword">LD</span>   (<span class="label">dc_d</span>), A
+    <span class="comment">; HL = d;  d += 2*x + 1</span>
+    <span class="keyword">LD</span>   A, (dc_x)
+    <span class="keyword">LD</span>   E, A
+    <span class="keyword">LD</span>   D, <span class="number">0</span>
+    <span class="keyword">ADD</span>  HL, DE
+    <span class="keyword">ADD</span>  HL, DE            <span class="comment">; + 2*x</span>
+    <span class="keyword">INC</span>  HL                <span class="comment">; + 1</span>
+    <span class="keyword">LD</span>   (dc_d), HL
     <span class="keyword">JR</span>   dc_loop
 
 <span class="label">dc_done</span>:
@@ -1899,105 +1899,105 @@ tr.highlight-row {
 <span class="comment">; memory before every pixel. D = x offset, E = y offset throughout.</span>
 <span class="label">dc_plot8</span>:
     <span class="comment">; (cx+x, cy+y)</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">LD</span>   E, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">LD</span>   A, (dc_cy)
     <span class="keyword">ADD</span>  A, E
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">LD</span>   A, (dc_cx)
     <span class="keyword">ADD</span>  A, D
     <span class="keyword">LD</span>   C, A
     <span class="keyword">CALL</span> set_pixel
 
     <span class="comment">; (cx-x, cy+y)</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">LD</span>   E, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">LD</span>   A, (dc_cy)
     <span class="keyword">ADD</span>  A, E
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">LD</span>   A, (dc_cx)
     <span class="keyword">SUB</span>  D
     <span class="keyword">LD</span>   C, A
     <span class="keyword">CALL</span> set_pixel
 
     <span class="comment">; (cx+x, cy-y)</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">LD</span>   E, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">LD</span>   A, (dc_cy)
     <span class="keyword">SUB</span>  E
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">LD</span>   A, (dc_cx)
     <span class="keyword">ADD</span>  A, D
     <span class="keyword">LD</span>   C, A
     <span class="keyword">CALL</span> set_pixel
 
     <span class="comment">; (cx-x, cy-y)</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">LD</span>   E, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">LD</span>   A, (dc_cy)
     <span class="keyword">SUB</span>  E
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">LD</span>   A, (dc_cx)
     <span class="keyword">SUB</span>  D
     <span class="keyword">LD</span>   C, A
     <span class="keyword">CALL</span> set_pixel
 
     <span class="comment">; (cx+y, cy+x)  -- x and y roles swap</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">LD</span>   E, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">LD</span>   A, (dc_cy)
     <span class="keyword">ADD</span>  A, D
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">LD</span>   A, (dc_cx)
     <span class="keyword">ADD</span>  A, E
     <span class="keyword">LD</span>   C, A
     <span class="keyword">CALL</span> set_pixel
 
     <span class="comment">; (cx-y, cy+x)</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">LD</span>   E, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">LD</span>   A, (dc_cy)
     <span class="keyword">ADD</span>  A, D
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">LD</span>   A, (dc_cx)
     <span class="keyword">SUB</span>  E
     <span class="keyword">LD</span>   C, A
     <span class="keyword">CALL</span> set_pixel
 
     <span class="comment">; (cx+y, cy-x)</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">LD</span>   E, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">LD</span>   A, (dc_cy)
     <span class="keyword">SUB</span>  D
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">LD</span>   A, (dc_cx)
     <span class="keyword">ADD</span>  A, E
     <span class="keyword">LD</span>   C, A
     <span class="keyword">CALL</span> set_pixel
 
     <span class="comment">; (cx-y, cy-x)</span>
-    <span class="keyword">LD</span>   A, (<span class="label">dc_x</span>)
+    <span class="keyword">LD</span>   A, (dc_x)
     <span class="keyword">LD</span>   D, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_y</span>)
+    <span class="keyword">LD</span>   A, (dc_y)
     <span class="keyword">LD</span>   E, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cy</span>)
+    <span class="keyword">LD</span>   A, (dc_cy)
     <span class="keyword">SUB</span>  D
     <span class="keyword">LD</span>   B, A
-    <span class="keyword">LD</span>   A, (<span class="label">dc_cx</span>)
+    <span class="keyword">LD</span>   A, (dc_cx)
     <span class="keyword">SUB</span>  E
     <span class="keyword">LD</span>   C, A
     <span class="keyword">CALL</span> set_pixel
@@ -2008,7 +2008,7 @@ tr.highlight-row {
 <span class="label">dc_cy</span>: <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; centre y</span>
 <span class="label">dc_x</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; current x offset (0 -&gt; radius)</span>
 <span class="label">dc_y</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; current y offset (radius -&gt; 0)</span>
-<span class="label">dc_d</span>:  <span class="directive">DB</span> <span class="number">0</span>   <span class="comment">; decision variable</span></code></pre>
+<span class="label">dc_d</span>:  <span class="directive">DW</span> <span class="number">0</span>   <span class="comment">; decision variable (16-bit signed)</span></code></pre>
 
 <p>Save this as <strong>draw_circle.asm</strong>. It requires <code>set_pixel.asm</code> and <code>calc_pixel_addr.asm</code>.</p>
 
@@ -2016,26 +2016,27 @@ tr.highlight-row {
 
 <p><code>set_pixel</code> destroys every register, so all four values needed per pixel — <code>dc_x</code>, <code>dc_y</code>, <code>dc_cy</code>, and <code>dc_cx</code> — are reloaded from memory before every one of the eight pixel calculations. Four loads per pixel across eight pixels equals thirty-two memory reads per call to <code>dc_plot8</code>. That is the cost of having no free registers to keep any of these values alive across <code>set_pixel</code> calls.</p>
 
-<p><strong>Limitation:</strong> <code>dc_d</code> is a single signed byte. The initial value <code>1&nbsp;&minus;&nbsp;radius</code> is stored as 8-bit two's complement, which holds values from &minus;128 to +127. For radius&nbsp;&gt;&nbsp;129, <code>1&nbsp;&minus;&nbsp;radius</code> underflows to a positive value, causing the <code>JP M</code> branch to take the wrong path and producing an incorrect circle. For typical Spectrum screen usage (radius&nbsp;&le;&nbsp;95, keeping the circle within the 192-pixel screen height) this limit is never reached.</p>
+<p><strong>Range:</strong> <code>dc_d</code> is a 16-bit signed value, so radii up to 255 are handled correctly. (An earlier 8-bit version of this routine began to draw distorted circles from a radius of about 77, as the decision variable overflowed.) The remaining limit is geometric: the whole circle must lie on the screen, because the routine does not clip.</p>
 
 <h2 id="5-filling">Flood Fill</h2>
 
 <p>Flood fill starts from a seed pixel and spreads to all connected unset pixels, setting each one. The simplest version is <strong>4-connected</strong>: from each pixel, the fill spreads to the four orthogonal neighbours (up, down, left, right) but not diagonally.</p>
 
-<p>The natural implementation is recursive: set the current pixel, then recurse to each unset neighbour. On the Z80 each recursive call pushes at least the return address (2 bytes) plus any saved registers — roughly 10 bytes per call. Filling a 30×30 area can push the call stack hundreds of frames deep, consuming several kilobytes. This is safe when filling small enclosed areas such as icon backgrounds or HUD boxes. Do not use recursive flood fill on large open areas.</p>
+<p>The natural implementation is recursive: set the current pixel, then recurse to each unset neighbour. On the Z80 each recursive call pushes at least the return address (2 bytes) plus any saved registers — 4 bytes per call here (the return address plus the <code>PUSH BC</code> that saves the coordinates). Filling a 30×30 area can push the call stack hundreds of frames deep, consuming several kilobytes. This is safe when filling small enclosed areas such as icon backgrounds or HUD boxes. Do not use recursive flood fill on large open areas.</p>
 
 <pre><code><span class="comment">; flood_fill</span>
 <span class="comment">; 4-connected flood fill from a seed pixel.</span>
 <span class="comment">; Input:  B = y  (0–191)</span>
 <span class="comment">;         C = x  (0–255)</span>
 <span class="comment">; Fills all unset pixels reachable from (x,y) by 4-connectivity.</span>
+<span class="comment">; The fill stops at the left and right screen edges (x does not wrap).</span>
 <span class="comment">; Warning: stack depth grows with fill area. Safe for small regions only.</span>
 <span class="comment">; Destroys: A, B, C, H, L (and uses stack heavily)</span>
 <span class="label">flood_fill</span>:
     <span class="comment">; bounds check: stay within 0–255 x, 0–191 y</span>
     <span class="keyword">LD</span>   A, B
     <span class="keyword">CP</span>   <span class="number">192</span>
-    <span class="keyword">RET</span>  NC               <span class="comment">; y >= 192: off screen</span>
+    <span class="keyword">RET</span>  NC               <span class="comment">; y &gt;= 192: off screen</span>
 
     <span class="comment">; check if pixel is already set — if so, stop</span>
     <span class="keyword">PUSH</span> BC
@@ -2063,14 +2064,19 @@ tr.highlight-row {
     <span class="keyword">CALL</span> flood_fill
     <span class="keyword">POP</span>  BC
 
-    <span class="comment">; recurse: left (x-1)</span>
+    <span class="comment">; recurse: left (x-1) — skip if already at x = 0 (DEC would wrap to 255)</span>
+    <span class="keyword">LD</span>   A, C
+    <span class="keyword">OR</span>   A
+    <span class="keyword">JR</span>   Z, ff_no_left
     <span class="keyword">PUSH</span> BC
     <span class="keyword">DEC</span>  C
     <span class="keyword">CALL</span> flood_fill
     <span class="keyword">POP</span>  BC
+<span class="label">ff_no_left</span>:
 
-    <span class="comment">; recurse: right (x+1)</span>
+    <span class="comment">; recurse: right (x+1) — INC wraps 255 to 0 and sets Z: off the right edge</span>
     <span class="keyword">INC</span>  C
+    <span class="keyword">RET</span>  Z
     <span class="keyword">JP</span>   flood_fill        <span class="comment">; tail call — no PUSH/POP needed for last branch</span>
 
 <span class="label">ff_already_set</span>:
@@ -2081,7 +2087,7 @@ tr.highlight-row {
 
 <p>The final recursive call (right neighbour) is a <strong>tail call</strong> — <code>flood_fill</code> has nothing left to do after it returns. Replacing <code>CALL flood_fill / RET</code> with <code>JP flood_fill</code> eliminates one stack frame for every right-moving step, slightly reducing peak stack depth.</p>
 
-<p>The y&nbsp;&ge;&nbsp;192 bounds check at the entry prevents going off the bottom of the screen. There is no x bounds check: x is an 8-bit register, so incrementing past 255 wraps to 0, and decrementing below 0 wraps to 255 — both of which land on valid (if distant) screen pixels. In practice, a correctly drawn enclosing border stops the fill before it reaches the edge.</p>
+<p>The y&nbsp;&ge;&nbsp;192 bounds check at the entry prevents going off the bottom of the screen; going above the top wraps y to 255, which fails the same check. For x the routine checks explicitly before each horizontal step: <code>LD A, C / OR A / JR Z</code> skips the left recursion when x is 0, and <code>INC C / RET Z</code> abandons the right recursion when x wraps from 255 to 0. Without these checks the fill would leak across the edge and re-emerge on the opposite side of the screen.</p>
 
 <h2 id="5-example-hollow-rect">Example: Hollow Rectangle</h2>
 
@@ -2168,7 +2174,7 @@ tr.highlight-row {
 
 <h2 id="5-example-filled-circle">Example: Filled Circle</h2>
 
-<p>A filled circle requires two steps: draw the outline with <code>draw_circle</code> to create a closed border, then seed <code>flood_fill</code> at the centre. The flood fill follows the four-neighbour rule and stops at every set pixel — which is exactly the outline just drawn. Keep the radius small: the recursive fill uses approximately 10 bytes of stack per pixel visited, so a radius of 15 gives a 30-pixel-diameter interior of roughly 700 pixels, well within safe limits.</p>
+<p>A filled circle requires two steps: draw the outline with <code>draw_circle</code> to create a closed border, then seed <code>flood_fill</code> at the centre. The flood fill follows the four-neighbour rule and stops at every set pixel — which is exactly the outline just drawn. Keep the radius small: the recursive fill uses approximately 4 bytes of stack per pixel visited, so a radius of 15 gives a 30-pixel-diameter interior of roughly 700 pixels, or about 3&nbsp;KB of stack — fine if your stack has room, but keep an eye on it.</p>
 
 <pre><code>    <span class="directive">ORG</span>  <span class="number">$8000</span>
 

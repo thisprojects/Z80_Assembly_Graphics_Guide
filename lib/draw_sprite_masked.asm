@@ -24,6 +24,8 @@
 ; Destroys: A, B, C, D, E, H, L, IX
 draw_sprite_masked:
     LD   A, (IX+0)
+    OR   A                 ; height = 0?
+    RET  Z                 ; nothing to draw (else DEC would wrap to 255 rows)
     LD   (dm_rows),  A
     LD   A, (IX+1)
     LD   (dm_width), A

@@ -156,11 +156,13 @@ tr.highlight-row {
     <li><a href="#8-rom-charset">Using the ROM Character Set</a></li>
     <li><a href="#8-custom-charset">Custom Character Sets</a></li>
     <li><a href="#8-udg">User Defined Graphics (UDGs)</a></li>
+    <li><a href="#8-complete">Complete Example: text_demo.asm</a></li>
 </ul>
 <li><a href="#9-double-buffering">9. Double Buffering &amp; Flicker-Free Animation</a></li>
 <ul>
     <li><a href="#9-offscreen-buffer">Off-Screen Buffer Techniques</a></li>
     <li><a href="#9-vsync">Synchronising to the Vertical Blank</a></li>
+    <li><a href="#9-complete">Complete Example: buffer_demo.asm</a></li>
     <li><a href="#9-page-flipping">Page Flipping</a></li>
 </ul>
 <li><a href="#10-optimisation">10. Graphics Optimisation</a></li>
@@ -168,6 +170,7 @@ tr.highlight-row {
     <li><a href="#10-ldir">Using LDIR for Block Copies</a></li>
     <li><a href="#10-unrolling">Loop Unrolling</a></li>
     <li><a href="#10-lookup-tables">Lookup Tables for Screen Addresses</a></li>
+    <li><a href="#10-examples">Complete Examples: speed_demo.asm and lookup_demo.asm</a></li>
 </ul>
 </ul>
 </nav>
@@ -280,6 +283,8 @@ tr.highlight-row {
 <span class="comment">; Destroys: A, B, C, D, E, H, L, IX</span>
 <span class="label">draw_sprite:</span>
     <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+0)</span>         <span class="comment">; read height from sprite header</span>
+    <span class="keyword">OR</span>   A                 <span class="comment">; height = 0?</span>
+    <span class="keyword">RET</span>  Z                 <span class="comment">; nothing to draw (else DEC would wrap to 255 rows)</span>
     <span class="keyword">LD</span>   <span class="string">(ds_rows)</span>, <span class="string">A</span>      <span class="comment">; store as decreasing row counter</span>
     <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+1)</span>         <span class="comment">; read byte-width from sprite header</span>
     <span class="keyword">LD</span>   <span class="string">(ds_width)</span>, <span class="string">A</span>
@@ -435,6 +440,8 @@ tr.highlight-row {
 <span class="comment">; Destroys: A, B, C, D, E, H, L, IX</span>
 <span class="label">draw_sprite_masked:</span>
     <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+0)</span>
+    <span class="keyword">OR</span>   A                 <span class="comment">; height = 0?</span>
+    <span class="keyword">RET</span>  Z                 <span class="comment">; nothing to draw (else DEC would wrap to 255 rows)</span>
     <span class="keyword">LD</span>   <span class="string">(dm_rows)</span>, <span class="string">A</span>
     <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+1)</span>
     <span class="keyword">LD</span>   <span class="string">(dm_width)</span>, <span class="string">A</span>
@@ -1281,7 +1288,7 @@ tr.highlight-row {
 
 <h3>Speed Comparison</h3>
 
-<p><code>scroll_up_char</code> processes all 6144 display bytes in one call and the loop runs only 8 times.  <code>scroll_up_pixel</code> also processes 6144 bytes (191&times;32 = 6112 plus the 32-byte clear), but the overhead of 191 PUSH/POP pairs and 191 row-advance computations is roughly 25&times; higher.  On a 3.5&nbsp;MHz machine, a character-row scroll completes in under 2&nbsp;ms; a pixel-row scroll takes around 6–8&nbsp;ms.  Both are fast enough to run every frame at 50&nbsp;Hz, but the pixel-row version leaves less time for game logic.</p>
+<p><code>scroll_up_char</code> processes all 6144 display bytes in one call using 8 &times; 5 <code>LDIR</code> blocks plus the clears.  <code>scroll_up_pixel</code> moves almost as many bytes (191&times;32 = 6112 plus the 32-byte clear) but adds 191 PUSH/POP pairs and 191 row-advance computations — about 125 extra T-states per row, or roughly 24,000 in all.  The cost is dominated by <code>LDIR</code> itself at 21 T-states per byte: about 129,000 T-states for <code>scroll_up_char</code> and about 153,000 for <code>scroll_up_pixel</code>.  On a 3.5&nbsp;MHz machine that is roughly 37&nbsp;ms and 44&nbsp;ms — nearly two full 20&nbsp;ms frames each, and the pixel version is only about 20% slower.  Neither can run every frame at 50&nbsp;Hz; expect 25 scrolls per second at best, with no time left for anything else.</p>
 
 <h2 id="7-smooth-scroll">Smooth Scrolling Techniques</h2>
 
@@ -1390,7 +1397,7 @@ tr.highlight-row {
 
 <p>The Spectrum's ULA refreshes the screen continuously at 50 Hz.  If the CPU is writing to the display file while the electron beam is drawing those bytes, the visible result is a horizontal tear — part of the frame shows the old pixels, part shows the new.  Tearing is most noticeable with large scroll operations.</p>
 
-<p>The safe window for display updates is the <em>vertical blank</em>, the period after the beam has finished the last visible line (y&nbsp;=&nbsp;191) and before it starts the next frame at y&nbsp;=&nbsp;0.  On the Spectrum this window lasts roughly 1.25&nbsp;ms.  The standard way to synchronise to it is to hook the maskable interrupt: the ULA fires an interrupt request at the start of every frame, so an IM&nbsp;1 or IM&nbsp;2 handler that performs the scroll is guaranteed to run during the vertical blank.  A simpler but less precise alternative is to count T-states and start the scroll at the calculated frame boundary.</p>
+<p>The safe window for display updates is when the beam is away from the pixels you are changing.  The ULA fires its interrupt at the start of each frame, and the beam does not reach the first pixel row until about 64 scan lines (roughly 4&nbsp;ms) later, so an IM&nbsp;1 or IM&nbsp;2 handler can write to the top of the screen ahead of the beam.  Only operations shorter than that window are fully tear-free; a full-screen scroll takes about 37&ndash;44&nbsp;ms, so it will tear unless it is hidden by double buffering (Chapter&nbsp;9) or you restrict it to a smaller region.  A simpler but less precise alternative is to count T-states and start the work at a calculated point in the frame.</p>
 
 <p>For demos where a small amount of tearing is acceptable, the fastest approach is simply to call the scroll routine as quickly as possible and let the timing fall where it may.  At 50&nbsp;fps the tear moves up or down the screen each frame and blends into the motion.</p>
 
@@ -1408,9 +1415,9 @@ tr.highlight-row {
 
 <h3>Scroll Speed</h3>
 
-<p>Calling <code>scroll_up_pixel</code> once per frame (50 Hz) gives a scrolling speed of 50 pixels per second — smooth but slow.  To scroll faster, call it multiple times per frame or switch to <code>scroll_up_char</code> for 8-pixel steps.  Alternatively, mix the two: call <code>scroll_up_char</code> once per frame for 400 pixels/second, or hold a sub-pixel counter and call <code>scroll_up_pixel</code> N times on frames where the accumulated offset requires it.</p>
+<p>Each scroll call takes about two frames (see the speed comparison above), so <code>scroll_up_pixel</code> can manage only about 25 pixels per second — smooth but slow — and <code>scroll_up_char</code> about 200 pixels per second (8 pixels &times; 25 calls).  To go faster you must scroll less data: a smaller window, or a double-buffered scheme (Chapter&nbsp;9).  The speed difference between the two routines comes from the step size, not from the routine being cheaper to run.</p>
 
-<p>A practical rule of thumb: if the scroll speed in pixels per frame is a multiple of 8, use <code>scroll_up_char</code> for maximum efficiency.  For any other speed, use <code>scroll_up_pixel</code> and accept the extra CPU cost.  On a 3.5&nbsp;MHz machine, even <code>scroll_up_pixel</code> consumes less than 25% of a frame's T-states, leaving ample time for sprite logic and game state updates.</p>
+<p>A practical rule of thumb: because each scroll call costs about two frames whatever its step size, the scroll step is what sets your speed — use <code>scroll_up_char</code> to move 8 pixels per call, and <code>scroll_up_pixel</code> only when you need single-pixel steps.  At roughly 25 calls per second, <code>scroll_up_char</code> gives about 200 pixels per second and <code>scroll_up_pixel</code> about 25.  Either routine consumes the whole CPU budget while it runs, so on a stock Spectrum scroll only every few frames, or scroll a smaller region (a custom routine that moves fewer rows) if you need time for sprites and game logic.</p>
 
 <h2 id="7-complete">Complete Example: scroll_demo.asm</h2>
 
@@ -1420,9 +1427,9 @@ tr.highlight-row {
 
 <h3>Why there is no sprite in this demo</h3>
 
-<p>Keeping a sprite visually fixed on a scrolling background seems straightforward: erase the sprite, scroll the background, redraw the sprite at the same position.  The problem is timing.  Each of the Chapter 7 scroll routines must touch every one of the 6&thinsp;144 bytes in the display file, which at 3.5&thinsp;MHz takes between 20&thinsp;ms (<code>scroll_up_char</code>) and 60&thinsp;ms (<code>scroll_left_pixel</code>).  A PAL ZX Spectrum redraws its screen every 20&thinsp;ms.  The scroll routine alone therefore spans at least one complete display refresh — and during the whole of that time the sprite has been erased but not yet redrawn.  The electron beam sweeps through the sprite's row while the pixels are black, producing a visible flash on every single frame.</p>
+<p>Keeping a sprite visually fixed on a scrolling background seems straightforward: erase the sprite, scroll the background, redraw the sprite at the same position.  The problem is timing.  Each of the Chapter 7 scroll routines must touch every one of the 6&thinsp;144 bytes in the display file, which at 3.5&thinsp;MHz takes between about 37&thinsp;ms (<code>scroll_up_char</code>) and about 56&thinsp;ms (<code>scroll_left_pixel</code>).  A PAL ZX Spectrum redraws its screen every 20&thinsp;ms.  The scroll routine alone therefore spans at least two complete display refreshes — and during the whole of that time the sprite has been erased but not yet redrawn.  The electron beam sweeps through the sprite's row while the pixels are black, producing a visible flash on every single frame.</p>
 
-<p>The standard solution is <strong>double buffering</strong>: draw the complete next frame — background and sprite together — into a second block of memory that is not currently being displayed, then copy it to the visible display in one fast burst during the vertical blanking interval.  Because the copy happens while the beam is off-screen, the viewer never sees a partial frame.  Double buffering is covered in full in Chapter&nbsp;9.</p>
+<p>The standard solution is <strong>double buffering</strong>: draw the complete next frame — background and sprite together — into a second block of memory that is not currently being displayed, then show it only when it is complete.  On a 48K machine that means copying the parts that changed to the screen just after the frame interrupt, while the beam is still above them (a full-screen copy takes nearly two frames, so it cannot be hidden in the blanking interval); on a 128K machine it means flipping to the second screen.  Either way the viewer never sees a partial frame.  Double buffering is covered in full in Chapter&nbsp;9.</p>
 
 <h3>Background and Initialisation</h3>
 
@@ -1545,53 +1552,1143 @@ tr.highlight-row {
 
 <h3>Observing scroll_left_pixel and scroll_right_pixel</h3>
 
-<p>Hold key <strong>5</strong> or <strong>8</strong>.  The horizontal stripes lose their uniformity within a few frames: each row's bytes shift independently, so a yellow byte scrolling off one edge wraps back as a black byte at the other, gradually mixing the two colours.  This is a good visual reminder that the scroll routines treat the display as a flat array of bytes — they have no concept of stripes, sprites, or any other higher-level structure.</p>
+<p>Hold key <strong>5</strong> or <strong>8</strong>.  The whole display slides sideways one pixel per frame.  The horizontal scrolls do not wrap: pixels that leave one edge are lost and paper (zero) pixels enter at the other, so the picture is gradually erased from the side it is moving away from.  This is a good visual reminder that the scroll routines treat the display as a flat array of bytes — they have no concept of stripes, sprites, or any other higher-level structure.</p>
 
 <h3>What You See</h3>
 
-<p>The display opens with 12 solid yellow bars alternating with 12 black gaps, each 8 pixels tall.  By default the background scrolls up one pixel per frame, the bars flowing continuously toward the top and wrapping in from the bottom.  Holding 6 produces the same net motion but in visible 8-pixel jumps.  Holding 5 or 8 rotates the display sideways, gradually fragmenting the clean stripes into a mixture of yellow and black as the rows wrap around.</p>
+<p>The display opens with 12 solid yellow bars alternating with 12 black gaps, each 8 pixels tall.  By default the background scrolls up one pixel per frame, the bars flowing continuously toward the top.  The routines do not wrap, so blank rows enter at the bottom and the pattern empties out as it scrolls.  Holding 6 produces the same net motion but in visible 8-pixel jumps.  Holding 5 or 8 slides the display sideways, blanking it from one edge as zero pixels are shifted in.</p>
 </section>
 
 <section id="8-character-graphics">
 <h1>8. Character &amp; Text Graphics</h1>
 <a href="#" class="back-to-top">^ Back to top</a>
 
+<p>The Spectrum has no text mode. Every letter you see on screen is a small bitmap — eight bytes, one per scan line — copied into an 8&times;8 character cell of the same display file you have been drawing pixels into since Chapter 1. This is good news: the machinery for printing text is a close cousin of the sprite code you already have, and it is faster, because a character cell is always byte-aligned and exactly eight bytes tall. This chapter builds five small routines — <code>draw_glyph</code>, <code>print_char</code>, <code>print_string</code>, <code>fill_attr_cells</code> and <code>make_bold</code> — and finishes with a program that mixes ROM text, generated bold text and hand-drawn graphics characters in colour.</p>
+
 <h2 id="8-rom-charset">Using the ROM Character Set</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p>The Spectrum ROM contains a font of 96 characters: codes 32 (space) to 127 (the copyright sign). Each glyph is 8 bytes, top scan line first, with bit 7 as the leftmost pixel — exactly the same convention as the sprite data in Chapter 6. The whole font is 96&nbsp;&times;&nbsp;8&nbsp;=&nbsp;768 bytes and lives at <code>$3D00</code>&ndash;<code>$3FFF</code>. The glyph for character code <em>c</em> starts at <code>$3C00&nbsp;+&nbsp;8c</code>:</p>
+
+<table>
+<tr><th>Character</th><th>Code</th><th>Glyph address</th></tr>
+<tr><td>space</td><td>32</td><td><code>$3D00</code></td></tr>
+<tr><td><code>0</code></td><td>48</td><td><code>$3D80</code></td></tr>
+<tr><td><code>A</code></td><td>65</td><td><code>$3E08</code></td></tr>
+<tr><td>&copy;</td><td>127</td><td><code>$3FF8</code></td></tr>
+</table>
+
+<p>The ROM keeps <code>$3C00</code> — the address the glyph for code&nbsp;0 <em>would</em> have if the font were complete — in the system variable <code>CHARS</code> at address 23606. Our routines use the same idea, for the same reason: with a base that is "code 0", the address of any glyph is just base&nbsp;+&nbsp;8&nbsp;&times;&nbsp;code, with no subtraction of 32 to get wrong. The bytes of the letter <code>A</code> show what a glyph looks like:</p>
+
+<pre><code><span class="comment">; the glyph for "A" at $3E08</span>
+<span class="comment">;   $00   . . . . . . . .</span>
+<span class="comment">;   $3C   . . # # # # . .</span>
+<span class="comment">;   $42   . # . . . . # .</span>
+<span class="comment">;   $42   . # . . . . # .</span>
+<span class="comment">;   $7E   . # # # # # # .</span>
+<span class="comment">;   $42   . # . . . . # .</span>
+<span class="comment">;   $42   . # . . . . # .</span>
+<span class="comment">;   $00   . . . . . . . .</span></code></pre>
+
+<p>Notice that the glyph leaves the top and bottom scan lines and the rightmost column blank. That built-in spacing is why text printed in adjacent cells reads cleanly, and it is also what makes the bold transformation later in this chapter possible.</p>
+
+<h3>Character Cell Addresses</h3>
+
+<p>Text is positioned by <strong>character cell</strong>, not by pixel: row 0&ndash;23, column 0&ndash;31. The address of a cell's top scan line uses the same field layout as always — <code>010TT000</code> in H and <code>RRRCCCCC</code> in L — but because a cell is already aligned to a byte column and a scan-line-0 boundary, no x shifting or masking is needed. The character row <em>r</em> splits into TT (<code>r AND %00011000</code>) and RRR (<code>r AND %00000111</code>). The three <code>RRCA</code> instructions that line RRR up in bits 7&ndash;5 do the same wrap-around trick as <code>calc_pixel_addr</code>: the AND beforehand guarantees that only the three wanted bits can wrap.</p>
+
+<p>Once you have the address of scan line 0, the other seven scan lines of the same cell are at +$100, +$200 &hellip; +$700: <code>INC H</code>. This is the one place where <code>INC H</code> is always safe, because the low three bits of H hold the scan line and a cell never reaches scan line 8. (A sprite that is more than 8 rows tall has to use the full row-advance logic from Chapter 6.)</p>
+
+<h3>draw_glyph.asm</h3>
+
+<pre><code><span class="comment">; draw_glyph</span>
+<span class="comment">; Draw one 8x8 glyph into a character cell, replacing whatever was there.</span>
+<span class="comment">; Input:  DE = pointer to 8 glyph bytes (top scan line first)</span>
+<span class="comment">;         B  = character row    (0–23)</span>
+<span class="comment">;         C  = character column (0–31)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, D, E, H, L</span>
+<span class="label">draw_glyph:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">B</span>
+    <span class="keyword">AND</span>  <span class="number">%00011000</span>         <span class="comment">; TT field of the row: 0, 8 or 16</span>
+    <span class="keyword">OR</span>   <span class="number">%01000000</span>         <span class="comment">; H = 010TT000  (scan line 0)</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">B</span>
+    <span class="keyword">AND</span>  <span class="number">%00000111</span>         <span class="comment">; RRR = row within its third</span>
+    <span class="keyword">RRCA</span>                   <span class="comment">; }</span>
+    <span class="keyword">RRCA</span>                   <span class="comment">; } rotate right 3 = shift left 5: A = RRR00000</span>
+    <span class="keyword">RRCA</span>                   <span class="comment">; }</span>
+    <span class="keyword">OR</span>   <span class="string">C</span>                 <span class="comment">; add the column: A = RRRCCCCC</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">8</span>              <span class="comment">; eight scan lines per cell</span>
+<span class="label">dg_loop:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(DE)</span>           <span class="comment">; next glyph byte</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>           <span class="comment">; write it to the current scan line</span>
+    <span class="keyword">INC</span>  <span class="string">DE</span>
+    <span class="keyword">INC</span>  <span class="string">H</span>                 <span class="comment">; next scan line (safe: stays inside one cell)</span>
+    <span class="keyword">DJNZ</span> <span class="label">dg_loop</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>lib/draw_glyph.asm</strong>. It needs no other library file. It draws any eight bytes — a letter, a user-defined graphic, a piece of a tile map — and <em>replaces</em> the cell: the byte is stored, not OR'd, so whatever was there before is gone. That is the right behaviour for text, and it makes the routine very fast: eight loads and eight stores, and no address arithmetic per row.</p>
+
+<h3>print_char.asm</h3>
+
+<pre><code><span class="comment">; print_char</span>
+<span class="comment">; Print one character from the current character set into a character cell.</span>
+<span class="comment">; Input:  A = character code (32–127)</span>
+<span class="comment">;         B = character row    (0–23)</span>
+<span class="comment">;         C = character column (0–31)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, D, E, H, L</span>
+<span class="comment">; Requires draw_glyph.asm.</span>
+<span class="label">print_char:</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="number">0</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; * 2</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; * 4</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; * 8: eight bytes per glyph</span>
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="string">(charset_ptr)</span> <span class="comment">; address of the glyph for code 0 (font base - 256)</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">DE</span>            <span class="comment">; HL = address of this character's glyph</span>
+    <span class="keyword">EX</span>   <span class="string">DE</span>, <span class="string">HL</span>            <span class="comment">; DE = glyph pointer for draw_glyph</span>
+    <span class="keyword">JP</span>   <span class="label">draw_glyph</span>
+
+<span class="comment">; The default points at the ROM font: glyph for code 32 is at $3D00,</span>
+<span class="comment">; so the "code 0" address is $3D00 - 32*8 = $3C00.  This is the same value</span>
+<span class="comment">; the ROM keeps in the CHARS system variable (address 23606).</span>
+<span class="label">charset_ptr:</span> <span class="directive">DW</span> <span class="number">$3C00</span></code></pre>
+
+<p>Save this as <strong>lib/print_char.asm</strong>; it requires <code>draw_glyph.asm</code>. Multiplying the character code by 8 takes three <code>ADD HL, HL</code> instructions. The character-set pointer is read from memory, not hard-coded, so the very same routine prints ROM text, generated fonts and your own fonts: a program switches fonts by storing a different value in <code>charset_ptr</code>. The final <code>JP draw_glyph</code> is a tail call — <code>draw_glyph</code>'s <code>RET</code> returns directly to the caller of <code>print_char</code>.</p>
+
+<h3>print_string.asm</h3>
+
+<pre><code><span class="comment">; print_string</span>
+<span class="comment">; Print a zero-terminated string, wrapping to the next row after column 31.</span>
+<span class="comment">; Input:  HL = pointer to the string (bytes 32–127, ended by a 0 byte)</span>
+<span class="comment">;         B  = starting character row    (0–23)</span>
+<span class="comment">;         C  = starting character column (0–31)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="comment">; The caller must keep the text on the screen: rows beyond 23 are not checked.</span>
+<span class="comment">; Requires print_char.asm and draw_glyph.asm.</span>
+<span class="label">print_string:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(HL)</span>
+    <span class="keyword">OR</span>   <span class="string">A</span>
+    <span class="keyword">RET</span>  <span class="string">Z</span>                 <span class="comment">; zero byte: end of string</span>
+    <span class="keyword">INC</span>  <span class="string">HL</span>
+    <span class="keyword">PUSH</span> <span class="string">HL</span>                <span class="comment">; print_char destroys HL</span>
+    <span class="keyword">PUSH</span> <span class="string">BC</span>                <span class="comment">; ... and B</span>
+    <span class="keyword">CALL</span> <span class="label">print_char</span>
+    <span class="keyword">POP</span>  <span class="string">BC</span>
+    <span class="keyword">POP</span>  <span class="string">HL</span>
+    <span class="keyword">INC</span>  <span class="string">C</span>                 <span class="comment">; next column</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">C</span>
+    <span class="keyword">CP</span>   <span class="number">32</span>
+    <span class="keyword">JR</span>   <span class="string">C</span>, <span class="label">print_string</span>   <span class="comment">; still on this row</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">0</span>              <span class="comment">; wrap to the start of the next row</span>
+    <span class="keyword">INC</span>  <span class="string">B</span>
+    <span class="keyword">JR</span>   <span class="label">print_string</span></code></pre>
+
+<p>Save this as <strong>lib/print_string.asm</strong>; it requires <code>print_char.asm</code> and <code>draw_glyph.asm</code>. Strings are stored with <code>DB "TEXT", 0</code>: the zero byte marks the end, so no length needs to be passed. <code>print_char</code> destroys B (<code>draw_glyph</code> uses it as a counter) and HL, so both are saved on the stack around the call. When the column reaches 32 the routine wraps to column 0 of the next row. It does <em>not</em> check for row 24, so keep text on the screen.</p>
+
+<h3>Colouring Text: fill_attr_cells.asm</h3>
+
+<p>Printing writes only the pixel bytes; the colour of each cell comes from its attribute byte (Chapter 2). Setting a run of cells with <code>set_attr</code> would mean converting cell numbers into pixel coordinates and back again, so there is a small routine that works in cell units directly:</p>
+
+<pre><code><span class="comment">; fill_attr_cells</span>
+<span class="comment">; Set a run of attribute cells on one character row to the same value.</span>
+<span class="comment">; Input:  A = attribute byte</span>
+<span class="comment">;         B = character row    (0–23)</span>
+<span class="comment">;         C = first column     (0–31)</span>
+<span class="comment">;         E = number of cells  (1–32; 0 does nothing)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, D, E, H, L</span>
+<span class="label">fill_attr_cells:</span>
+    <span class="keyword">LD</span>   <span class="string">D</span>, <span class="string">A</span>              <span class="comment">; park the attribute while we test the count</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">E</span>
+    <span class="keyword">OR</span>   <span class="string">A</span>
+    <span class="keyword">RET</span>  <span class="string">Z</span>                 <span class="comment">; nothing to do (DJNZ with B=0 would loop 256 times)</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">D</span>
+    <span class="keyword">PUSH</span> <span class="string">AF</span>                <span class="comment">; keep the attribute across the address arithmetic</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="number">0</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="string">B</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; row * 2</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; row * 4</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; row * 8</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; row * 16</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; row * 32</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="string">E</span>              <span class="comment">; B = cell count (the row number is no longer needed)</span>
+    <span class="keyword">LD</span>   <span class="string">D</span>, <span class="number">0</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="string">C</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">DE</span>            <span class="comment">; + column</span>
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="number">$5800</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">DE</span>            <span class="comment">; HL = address of the first attribute cell</span>
+    <span class="keyword">POP</span>  <span class="string">AF</span>
+<span class="label">fac_loop:</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>
+    <span class="keyword">INC</span>  <span class="string">HL</span>
+    <span class="keyword">DJNZ</span> <span class="label">fac_loop</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>lib/fill_attr_cells.asm</strong>. The attribute for cell (row, col) is at <code>$5800 + row&times;32 + col</code>: five doublings of the row number give row&times;32 in HL, and the column is added as a 16-bit value so the result cannot overflow (row&nbsp;23&nbsp;&times;&nbsp;32 is already 736). The count is tested against zero first, because <code>DJNZ</code> with B&nbsp;=&nbsp;0 would run 256 times and write colour over the next several character rows.</p>
 
 <h2 id="8-custom-charset">Custom Character Sets</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p>Because <code>print_char</code> looks up its glyphs through <code>charset_ptr</code>, a custom character set is nothing more than 8 bytes per character somewhere in RAM and one store:</p>
+
+<pre><code>    <span class="keyword">LD</span>   <span class="string">HL</span>, my_font - 256    <span class="comment">; address "code 0" would have: base - 32 * 8</span>
+    <span class="keyword">LD</span>   <span class="string">(charset_ptr)</span>, <span class="string">HL</span>
+    ...
+<span class="label">my_font:</span>                      <span class="comment">; glyph for code 32 (space) comes first</span>
+    <span class="directive">DB</span>   <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>
+    <span class="directive">DB</span>   ...</code></pre>
+
+<p>The subtraction is done by the assembler. If your font only covers part of the range — say just the digits and a few symbols — put those glyphs in a table and compute the base as <code>table - first_code * 8</code>; only codes inside the table may then be printed.</p>
+
+<h3>Generating a Font: make_bold.asm</h3>
+
+<p>You do not have to draw a whole font by hand. Many useful variants can be computed from the ROM font when the program starts, and stored in a 768-byte RAM buffer. The simplest is <strong>bold</strong>: OR each glyph byte with itself shifted right by one pixel, which thickens every vertical stroke by one column. It works because the ROM glyphs leave their rightmost column empty:</p>
+
+<pre><code><span class="comment">; make_bold</span>
+<span class="comment">; Build a bold version of the ROM font in RAM.</span>
+<span class="comment">; Each glyph byte is OR'd with itself shifted one pixel to the right,</span>
+<span class="comment">; which thickens every vertical stroke by one pixel.</span>
+<span class="comment">; Input:  HL = destination buffer (768 bytes: 96 glyphs x 8 bytes)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="comment">; Use it by pointing charset_ptr at (buffer - 256).</span>
+<span class="label">make_bold:</span>
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="number">$3D00</span>         <span class="comment">; ROM glyph for code 32</span>
+    <span class="keyword">LD</span>   <span class="string">BC</span>, <span class="number">768</span>           <span class="comment">; 96 glyphs * 8 bytes</span>
+<span class="label">mb_loop:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(DE)</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>           <span class="comment">; copy the original byte</span>
+    <span class="keyword">RRCA</span>                   <span class="comment">; shift right one pixel (bit 0 wraps into bit 7)</span>
+    <span class="keyword">AND</span>  <span class="number">%01111111</span>         <span class="comment">; discard the wrapped bit</span>
+    <span class="keyword">OR</span>   <span class="string">(HL)</span>              <span class="comment">; merge with the original</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>
+    <span class="keyword">INC</span>  <span class="string">DE</span>
+    <span class="keyword">INC</span>  <span class="string">HL</span>
+    <span class="keyword">DEC</span>  <span class="string">BC</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">B</span>
+    <span class="keyword">OR</span>   <span class="string">C</span>
+    <span class="keyword">JR</span>   <span class="string">NZ</span>, <span class="label">mb_loop</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>lib/make_bold.asm</strong>. <code>RRCA</code> rotates, so the pixel that falls off the right end re-enters at bit 7; the <code>AND %01111111</code> throws that pixel away. The result is merged with the original byte by <code>OR (HL)</code> — the original was stored at <code>(HL)</code> a moment earlier, since the Z80 can only OR with memory through HL. The loop counts 768 bytes in BC, so it tests for zero with <code>LD A, B / OR C</code>: <code>DEC BC</code> does not set the Zero flag.</p>
+
+<p>The same approach gives <em>italics</em> (shift the top rows right and the bottom rows left by one pixel), <em>outline</em>, <em>underline</em> (set the last scan line) or <em>inverse</em> text (<code>CPL</code> each byte). Each is a short loop over the 768 bytes.</p>
 
 <h2 id="8-udg">User Defined Graphics (UDGs)</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p>A <strong>user defined graphic</strong> is simply a glyph that is not a letter: a heart, a brick, a smiling face, a piece of a border. On the Spectrum, BASIC lets you define 21 of them and print them with <code>CHR$ 144</code> to <code>CHR$ 164</code>. In assembly there is nothing special about them at all — <code>draw_glyph</code> takes a pointer to any eight bytes, so a UDG is eight <code>DB</code> lines and a label:</p>
+
+<pre><code><span class="label">udg_heart:</span>
+    <span class="directive">DB</span> <span class="number">%00000000</span>
+    <span class="directive">DB</span> <span class="number">%01100110</span>
+    <span class="directive">DB</span> <span class="number">%11111111</span>
+    <span class="directive">DB</span> <span class="number">%11111111</span>
+    <span class="directive">DB</span> <span class="number">%11111111</span>
+    <span class="directive">DB</span> <span class="number">%01111110</span>
+    <span class="directive">DB</span> <span class="number">%00111100</span>
+    <span class="directive">DB</span> <span class="number">%00011000</span></code></pre>
+
+<p>Writing the bytes in binary lets you see the picture in the source. A UDG is not limited to one cell: a bigger graphic is a rectangle of cells, each drawn with its own <code>draw_glyph</code> call, and a <strong>tile map</strong> — a level made of repeated bricks, floors and ladders — is a table of bytes that selects which glyph goes into which cell.</p>
+
+<p>How does this compare with the sprites of Chapter 6? A UDG is locked to the 8&times;8 grid, has no mask, and replaces its cell instead of blending with the background. In exchange it costs a fraction of the time and needs no clipping, because a valid cell is always entirely on the screen. That makes UDGs the right tool for HUD elements, tile-based backgrounds and anything that never needs to move by single pixels.</p>
+
+<h2 id="8-complete">Complete Example: text_demo.asm</h2>
+
+<p>This program prints a line of ROM text, switches to a generated bold font for a second line, and then draws three UDGs, each coloured with <code>fill_attr_cells</code>. The source is also in <code>examples/text_demo.asm</code>.</p>
+
+<p>Build from the project root with: <code>pasmo --tapbas examples/text_demo.asm text_demo.tap</code></p>
+
+<pre><code><span class="comment">; text_demo — Chapter 8 example.</span>
+<span class="comment">; Build from the project root:  pasmo --tapbas examples/text_demo.asm text_demo.tap</span>
+    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">FONT_BUF</span> <span class="directive">EQU</span> <span class="number">$9000</span>          <span class="comment">; 768 bytes for the generated bold font</span>
+
+<span class="label">main:</span>
+    <span class="comment">; Clear the pixels, then white ink on black paper everywhere</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, <span class="number">$4000</span>
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="number">$4001</span>
+    <span class="keyword">LD</span>   <span class="string">BC</span>, <span class="number">6143</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="number">0</span>
+    <span class="keyword">LDIR</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">%00000111</span>
+    <span class="keyword">CALL</span> <span class="label">fill_screen_attr</span>
+
+    <span class="comment">; 1. ROM font, bright yellow</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, <span class="label">msg_rom</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">2</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">8</span>
+    <span class="keyword">CALL</span> <span class="label">print_string</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">%01000110</span>       <span class="comment">; bright, paper 0 (black), ink 6 (yellow)</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">2</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">8</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="number">15</span>              <span class="comment">; "HELLO, SPECTRUM" is 15 characters</span>
+    <span class="keyword">CALL</span> <span class="label">fill_attr_cells</span>
+
+    <span class="comment">; 2. Bold font generated from the ROM font, bright cyan</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, <span class="label">FONT_BUF</span>
+    <span class="keyword">CALL</span> <span class="label">make_bold</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, FONT_BUF - 256 <span class="comment">; "code 0" address = buffer - 32*8</span>
+    <span class="keyword">LD</span>   <span class="string">(charset_ptr)</span>, <span class="string">HL</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, <span class="label">msg_bold</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">5</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">11</span>
+    <span class="keyword">CALL</span> <span class="label">print_string</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">%01000101</span>       <span class="comment">; bright cyan ink</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">5</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">11</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="number">9</span>               <span class="comment">; "BOLD TEXT"</span>
+    <span class="keyword">CALL</span> <span class="label">fill_attr_cells</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, <span class="number">$3C00</span>          <span class="comment">; back to the ROM font</span>
+    <span class="keyword">LD</span>   <span class="string">(charset_ptr)</span>, <span class="string">HL</span>
+
+    <span class="comment">; 3. Three UDGs in a row, each in its own colour</span>
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="label">udg_heart</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">9</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">12</span>
+    <span class="keyword">CALL</span> <span class="label">draw_glyph</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">%01000010</span>       <span class="comment">; bright red</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">9</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">12</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="number">1</span>
+    <span class="keyword">CALL</span> <span class="label">fill_attr_cells</span>
+
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="label">udg_smile</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">9</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">14</span>
+    <span class="keyword">CALL</span> <span class="label">draw_glyph</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">%01000110</span>       <span class="comment">; bright yellow</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">9</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">14</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="number">1</span>
+    <span class="keyword">CALL</span> <span class="label">fill_attr_cells</span>
+
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="label">udg_alien</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">9</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">16</span>
+    <span class="keyword">CALL</span> <span class="label">draw_glyph</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">%01000100</span>       <span class="comment">; bright green</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">9</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">16</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="number">1</span>
+    <span class="keyword">CALL</span> <span class="label">fill_attr_cells</span>
+
+    <span class="keyword">EI</span>
+<span class="label">done:</span>
+    <span class="keyword">HALT</span>
+    <span class="keyword">JR</span>   <span class="label">done</span>
+
+<span class="label">msg_rom:</span>  <span class="directive">DB</span> <span class="string">"HELLO, SPECTRUM"</span>, <span class="number">0</span>
+<span class="label">msg_bold:</span> <span class="directive">DB</span> <span class="string">"BOLD TEXT"</span>, <span class="number">0</span>
+
+<span class="label">udg_heart:</span>
+    <span class="directive">DB</span> <span class="number">%00000000</span>
+    <span class="directive">DB</span> <span class="number">%01100110</span>
+    <span class="directive">DB</span> <span class="number">%11111111</span>
+    <span class="directive">DB</span> <span class="number">%11111111</span>
+    <span class="directive">DB</span> <span class="number">%11111111</span>
+    <span class="directive">DB</span> <span class="number">%01111110</span>
+    <span class="directive">DB</span> <span class="number">%00111100</span>
+    <span class="directive">DB</span> <span class="number">%00011000</span>
+<span class="label">udg_smile:</span>
+    <span class="directive">DB</span> <span class="number">%00111100</span>
+    <span class="directive">DB</span> <span class="number">%01000010</span>
+    <span class="directive">DB</span> <span class="number">%10100101</span>
+    <span class="directive">DB</span> <span class="number">%10000001</span>
+    <span class="directive">DB</span> <span class="number">%10100101</span>
+    <span class="directive">DB</span> <span class="number">%10011001</span>
+    <span class="directive">DB</span> <span class="number">%01000010</span>
+    <span class="directive">DB</span> <span class="number">%00111100</span>
+<span class="label">udg_alien:</span>
+    <span class="directive">DB</span> <span class="number">%00011000</span>
+    <span class="directive">DB</span> <span class="number">%00111100</span>
+    <span class="directive">DB</span> <span class="number">%01111110</span>
+    <span class="directive">DB</span> <span class="number">%11011011</span>
+    <span class="directive">DB</span> <span class="number">%11111111</span>
+    <span class="directive">DB</span> <span class="number">%00100100</span>
+    <span class="directive">DB</span> <span class="number">%01011010</span>
+    <span class="directive">DB</span> <span class="number">%10100101</span>
+
+    <span class="directive">INCLUDE</span> <span class="string">"lib/fill_screen_attr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/draw_glyph.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/print_char.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/print_string.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/fill_attr_cells.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/make_bold.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<h3>What You See</h3>
+
+<p>"HELLO, SPECTRUM" in bright yellow on row 2, "BOLD TEXT" in noticeably heavier bright cyan letters on row 5, and below them a red heart, a yellow smiling face and a green alien. The font switch is just one store to <code>charset_ptr</code> each way; no routine was changed or duplicated.</p>
+
+<h3>Chapter 8 Library Summary</h3>
+
+<table>
+<tr><th>File</th><th>Input</th><th>Does</th></tr>
+<tr><td><code>draw_glyph.asm</code></td><td>DE = 8 bytes, B = row, C = col</td><td>Draws one glyph into a cell</td></tr>
+<tr><td><code>print_char.asm</code></td><td>A = code, B = row, C = col</td><td>Prints a character using <code>charset_ptr</code></td></tr>
+<tr><td><code>print_string.asm</code></td><td>HL = string, B = row, C = col</td><td>Prints a zero-terminated string, wrapping at column 32</td></tr>
+<tr><td><code>fill_attr_cells.asm</code></td><td>A = attribute, B = row, C = col, E = count</td><td>Colours a run of cells</td></tr>
+<tr><td><code>make_bold.asm</code></td><td>HL = 768-byte buffer</td><td>Generates a bold copy of the ROM font</td></tr>
+</table>
+
+<p class="bold-text">Key fact: text is just 8 bytes per cell. Once the address of a cell's top scan line is known, the other seven are one <code>INC H</code> apart, and the font is nothing but a pointer — change the pointer and every routine prints in the new font.</p>
 </section>
 
 <section id="9-double-buffering">
 <h1>9. Double Buffering &amp; Flicker-Free Animation</h1>
 <a href="#" class="back-to-top">^ Back to top</a>
 
+<p>Chapter 6 animated a sprite by erasing it and drawing it again, and Chapter 7 warned that the same approach breaks down when a lot of work happens between the erase and the redraw. The cause is the display itself: the ULA reads the display file continuously, fifty times a second, in step with the electron beam. Anything you change on screen can be caught by the beam half-way through. If the beam passes while a sprite is erased, the viewer sees a gap; if it passes while a sprite is half drawn, the viewer sees part of the new picture and part of the old. This chapter removes both problems by never letting the beam see unfinished work.</p>
+
 <h2 id="9-offscreen-buffer">Off-Screen Buffer Techniques</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p>The idea is simple: build the next frame in a block of memory that is not being displayed, and show it only when it is complete. On a 48K Spectrum the buffer is a 6,144-byte area that has exactly the same layout as the display file, so all the address arithmetic you already have still works. In this book the buffer lives at <code>$A000</code>&ndash;<code>$B7FF</code>, above the program.</p>
+
+<p>The buffer layout is identical to the screen layout, so an address in the buffer differs from the matching screen address only in the high byte. The display file's high byte is <code>010TTLLL</code>; the buffer's is <code>101TTLLL</code>. Adding a constant to H moves any screen address into the buffer, without disturbing the TT and LLL fields, as long as the constant leaves the five low bits of the base zero (the row-advance code only ever touches those five bits). The constant is kept in a variable, <code>draw_offset</code>, so one routine can draw to several places:</p>
+
+<table>
+<tr><th><code>draw_offset</code></th><th>Draws to</th><th>Used for</th></tr>
+<tr><td><code>$00</code></td><td>the screen at <code>$4000</code></td><td>drawing directly (no buffer)</td></tr>
+<tr><td><code>$60</code></td><td>the buffer at <code>$A000</code></td><td>48K double buffering (the default)</td></tr>
+<tr><td><code>$80</code></td><td>bank 7 at <code>$C000</code></td><td>128K page flipping, later in this chapter</td></tr>
+</table>
+
+<h3>draw_sprite_masked_buf.asm</h3>
+
+<p>This is <code>draw_sprite_masked</code> from Chapter 6 with one change: after <code>calc_pixel_addr</code> returns the screen address, the offset is added to H. Everything else — the AND-then-OR masking, the row-advance logic — is unchanged.</p>
+
+<pre><code><span class="comment">; draw_sprite_masked_buf</span>
+<span class="comment">; Draw a masked, character-aligned sprite into an off-screen display buffer.</span>
+<span class="comment">; Identical to draw_sprite_masked except that the address is moved into the</span>
+<span class="comment">; buffer by adding draw_offset to the high byte of the display address.</span>
+<span class="comment">;</span>
+<span class="comment">;   draw_offset = $00  draw straight to the screen at $4000</span>
+<span class="comment">;   draw_offset = $60  draw to a buffer at $A000   (48K double buffering)</span>
+<span class="comment">;   draw_offset = $80  draw to bank 7 at $C000     (128K page flipping)</span>
+<span class="comment">;</span>
+<span class="comment">; Input:  B  = y (0–191)   C = x (multiple of 8)</span>
+<span class="comment">;         IX = masked sprite descriptor (see draw_sprite_masked)</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L, IX</span>
+<span class="label">draw_sprite_masked_buf:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+0)</span>
+    <span class="keyword">OR</span>   <span class="string">A</span>                 <span class="comment">; height = 0?</span>
+    <span class="keyword">RET</span>  <span class="string">Z</span>                 <span class="comment">; nothing to draw</span>
+    <span class="keyword">LD</span>   <span class="string">(dmb_rows)</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+1)</span>
+    <span class="keyword">LD</span>   <span class="string">(dmb_width)</span>, <span class="string">A</span>
+    <span class="keyword">INC</span>  <span class="string">IX</span>                <span class="comment">; skip height byte</span>
+    <span class="keyword">INC</span>  <span class="string">IX</span>                <span class="comment">; skip width byte</span>
+
+    <span class="keyword">CALL</span> <span class="label">calc_pixel_addr</span>   <span class="comment">; HL = screen address of (y, x)</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(draw_offset)</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="string">H</span>              <span class="comment">; move the address into the buffer</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+
+<span class="label">dmb_row_loop:</span>
+    <span class="keyword">PUSH</span> <span class="string">HL</span>                <span class="comment">; save start-of-row address</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(dmb_width)</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="string">A</span>
+<span class="label">dmb_col_loop:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+0)</span>         <span class="comment">; AND mask byte</span>
+    <span class="keyword">AND</span>  <span class="string">(HL)</span>              <span class="comment">; punch a hole in the background</span>
+    <span class="keyword">LD</span>   <span class="string">D</span>, <span class="string">A</span>
+    <span class="keyword">INC</span>  <span class="string">IX</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+0)</span>         <span class="comment">; OR pixel byte</span>
+    <span class="keyword">OR</span>   <span class="string">D</span>                 <span class="comment">; fill the hole with sprite pixels</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>
+    <span class="keyword">INC</span>  <span class="string">IX</span>
+    <span class="keyword">INC</span>  <span class="string">L</span>
+    <span class="keyword">DJNZ</span> <span class="label">dmb_col_loop</span>
+    <span class="keyword">POP</span>  <span class="string">HL</span>
+
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>              <span class="comment">; step down one pixel row (same logic as draw_sprite)</span>
+    <span class="keyword">AND</span>  <span class="number">$07</span>
+    <span class="keyword">CP</span>   <span class="number">$07</span>
+    <span class="keyword">JR</span>   <span class="string">Z</span>, <span class="label">dmb_cross</span>
+    <span class="keyword">INC</span>  <span class="string">H</span>
+    <span class="keyword">JR</span>   <span class="label">dmb_row_dec</span>
+<span class="label">dmb_cross:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">AND</span>  <span class="number">$F8</span>               <span class="comment">; back to scan line 0</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">L</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="number">$20</span>            <span class="comment">; next character row within the third</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   <span class="string">NC</span>, <span class="label">dmb_row_dec</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="number">$08</span>            <span class="comment">; next third</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+<span class="label">dmb_row_dec:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(dmb_rows)</span>
+    <span class="keyword">DEC</span>  <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">(dmb_rows)</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   <span class="string">NZ</span>, <span class="label">dmb_row_loop</span>
+    <span class="keyword">RET</span>
+
+<span class="label">draw_offset:</span> <span class="directive">DB</span> <span class="number">$60</span>        <span class="comment">; added to H: where the "screen" being drawn to lives</span>
+<span class="label">dmb_rows:</span>    <span class="directive">DB</span> <span class="number">0</span>
+<span class="label">dmb_width:</span>   <span class="directive">DB</span> <span class="number">0</span></code></pre>
+
+<p>Save this as <strong>lib/draw_sprite_masked_buf.asm</strong>; it requires <code>calc_pixel_addr.asm</code>. The sprite format is exactly the masked format from Chapter 6. The routine also returns immediately for a sprite of height zero, which would otherwise draw 256 rows.</p>
+
+<h3>clear_buffer.asm</h3>
+
+<pre><code><span class="comment">; clear_buffer</span>
+<span class="comment">; Clear the 6144 pixel bytes of the current draw target (see draw_offset).</span>
+<span class="comment">; Input:  none      Output: none</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="comment">; Requires draw_sprite_masked_buf.asm (for draw_offset).</span>
+<span class="label">clear_buffer:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(draw_offset)</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="number">$40</span>            <span class="comment">; high byte of the target's first pixel byte</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="number">0</span>
+    <span class="keyword">LD</span>   <span class="string">D</span>, <span class="string">H</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="number">1</span>              <span class="comment">; DE = HL + 1: LDIR smears the first byte forwards</span>
+    <span class="keyword">LD</span>   <span class="string">BC</span>, <span class="number">6143</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="number">0</span>
+    <span class="keyword">LDIR</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>lib/clear_buffer.asm</strong>. It uses the "smear" idiom: store 0 in the first byte, point DE one byte beyond HL, and let <code>LDIR</code> copy each byte onto the next, spreading the zero through all 6,144 bytes. It follows <code>draw_offset</code>, so it clears whichever screen is the current draw target.</p>
+
+<h3>copy_cells.asm</h3>
+
+<p>Copying the whole buffer to the screen is the obvious last step, but it is also the slow step: <code>LDIR</code> costs 21 T-states per byte, so 6,144 bytes take about 129,000 T-states — nearly two whole frames (a frame is 69,888 T-states). Copying everything every frame would be slower than drawing directly. The practical answer is to copy only the part of the screen that changed. Because the buffer and the screen have the same layout, a rectangle of character cells is just eight <code>LDIR</code>s, one per scan line, each as wide as the rectangle:</p>
+
+<pre><code><span class="comment">; copy_cells</span>
+<span class="comment">; Copy a rectangle of character cells from the off-screen buffer to the screen.</span>
+<span class="comment">; Input:  B = first character row     (0–23)</span>
+<span class="comment">;         C = first character column  (0–31)</span>
+<span class="comment">;         D = height in character rows (1–24)</span>
+<span class="comment">;         E = width in cells           (1–32)</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="comment">; Requires draw_sprite_masked_buf.asm (for draw_offset).</span>
+<span class="label">copy_cells:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">E</span>
+    <span class="keyword">LD</span>   <span class="string">(cc_width)</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">D</span>
+    <span class="keyword">LD</span>   <span class="string">(cc_rows)</span>, <span class="string">A</span>
+
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">B</span>              <span class="comment">; HL = screen address of the first cell, scan line 0</span>
+    <span class="keyword">AND</span>  <span class="number">%00011000</span>
+    <span class="keyword">OR</span>   <span class="number">%01000000</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">B</span>
+    <span class="keyword">AND</span>  <span class="number">%00000111</span>
+    <span class="keyword">RRCA</span>
+    <span class="keyword">RRCA</span>
+    <span class="keyword">RRCA</span>
+    <span class="keyword">OR</span>   <span class="string">C</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="string">A</span>
+
+<span class="label">cc_row:</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">8</span>              <span class="comment">; eight scan lines per character row</span>
+<span class="label">cc_scan:</span>
+    <span class="keyword">PUSH</span> <span class="string">BC</span>
+    <span class="keyword">PUSH</span> <span class="string">HL</span>                <span class="comment">; remember this scan line's screen address</span>
+    <span class="keyword">LD</span>   <span class="string">D</span>, <span class="string">H</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="string">L</span>              <span class="comment">; DE = destination (screen)</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(draw_offset)</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>              <span class="comment">; HL = source (buffer)</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(cc_width)</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">0</span>
+    <span class="keyword">LDIR</span>                   <span class="comment">; copy one scan line of the rectangle</span>
+    <span class="keyword">POP</span>  <span class="string">HL</span>
+    <span class="keyword">POP</span>  <span class="string">BC</span>
+    <span class="keyword">INC</span>  <span class="string">H</span>                 <span class="comment">; next scan line of this character row</span>
+    <span class="keyword">DJNZ</span> <span class="label">cc_scan</span>
+
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>              <span class="comment">; eight INC H have moved us to the next 8-block:</span>
+    <span class="keyword">SUB</span>  <span class="number">8</span>                 <span class="comment">; step back to scan line 0 of this character row</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">L</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="number">$20</span>            <span class="comment">; next character row</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   <span class="string">NC</span>, <span class="label">cc_same_third</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="number">8</span>              <span class="comment">; crossed into the next third</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+<span class="label">cc_same_third:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(cc_rows)</span>
+    <span class="keyword">DEC</span>  <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">(cc_rows)</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   <span class="string">NZ</span>, <span class="label">cc_row</span>
+    <span class="keyword">RET</span>
+
+<span class="label">cc_width:</span> <span class="directive">DB</span> <span class="number">0</span>
+<span class="label">cc_rows:</span>  <span class="directive">DB</span> <span class="number">0</span></code></pre>
+
+<p>Save this as <strong>lib/copy_cells.asm</strong>; it requires <code>draw_sprite_masked_buf.asm</code> for <code>draw_offset</code>. The routine keeps the destination in DE and builds the source by adding the offset to H. After eight <code>INC H</code> steps the address has moved to the next 8-block, so the routine subtracts 8 to get back to scan line 0 of the same character row, and then adds <code>$20</code> to step to the next character row — carrying into the third field exactly as the sprite routines do.</p>
 
 <h2 id="9-vsync">Synchronising to the Vertical Blank</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p>A buffer removes the half-drawn sprite, but the copy into the screen can still be caught by the beam. To avoid that, the copy has to happen at the right moment in the frame. The ULA generates an interrupt at the start of every frame, and the Z80 instruction <code>HALT</code> stops the processor until the next interrupt arrives — so after an <code>EI</code>, a single <code>HALT</code> is a frame synchroniser:</p>
+
+<pre><code>    <span class="keyword">EI</span>                       <span class="comment">; interrupts must be enabled</span>
+<span class="label">frame:</span>
+    ...                      <span class="comment">; build the next frame in the buffer</span>
+    <span class="keyword">HALT</span>                     <span class="comment">; wait here until the next frame interrupt</span>
+    ...                      <span class="comment">; copy to the screen now</span>
+    <span class="keyword">JR</span>   <span class="label">frame</span></code></pre>
+
+<p>Here is the timing of a 48K frame, in T-states at 3.5&nbsp;MHz:</p>
+
+<table>
+<tr><th>Event</th><th>Time after the interrupt</th></tr>
+<tr><td>Interrupt fires (the ROM's handler runs: frame counter, keyboard scan)</td><td>0</td></tr>
+<tr><td>Beam reaches the first pixel row (64 lines &times; 224 T-states)</td><td>14,336</td></tr>
+<tr><td>Beam reaches pixel row <em>y</em></td><td>14,336 + 224&nbsp;&times;&nbsp;<em>y</em></td></tr>
+<tr><td>Beam finishes the last pixel row</td><td>57,344</td></tr>
+<tr><td>Frame ends, next interrupt</td><td>69,888</td></tr>
+</table>
+
+<p>The rule that follows is: <strong>a region of the screen can be updated without tearing if the update is finished before the beam reaches that region's first pixel row.</strong> Right after <code>HALT</code> the beam is nowhere near the picture. A character row near the top of the screen gives you 14,336 T-states minus the interrupt handler; a row lower down gives you 1,792 more for every character row. A character row copied with <code>copy_cells</code> costs roughly 6,500 T-states (256 bytes at 21 T-states, plus about 1,000 of loop overhead), so one or two rows at the top are safe, and a row in the middle of the screen has several times the time it needs. The budget is the reason that the example below copies only the rows the sprite touches.</p>
+
+<p>The 128K Spectrum has a slightly different frame (70,908 T-states) and ULA timing, but the same principle applies.</p>
+
+<h3>Measuring with the Border</h3>
+
+<p>To see how long a piece of code takes, bracket it with writes to the border port. The colour change takes effect at the beam's current position, so the height of each coloured band on the border is the duration of the code:</p>
+
+<pre><code>    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">2</span>                <span class="comment">; red</span>
+    <span class="keyword">OUT</span>  <span class="string">($FE)</span>, <span class="string">A</span>            <span class="comment">; border red from this moment...</span>
+    <span class="keyword">CALL</span> <span class="label">my_routine</span>
+    <span class="keyword">XOR</span>  <span class="string">A</span>                   <span class="comment">; black</span>
+    <span class="keyword">OUT</span>  <span class="string">($FE)</span>, <span class="string">A</span>            <span class="comment">; ...until this moment</span></code></pre>
+
+<p>If the red band is taller than a frame, the routine takes more than a frame, and a frame-locked animation will drop to half speed. This technique is used in the Chapter 10 example as well.</p>
+
+<h2 id="9-complete">Complete Example: buffer_demo.asm</h2>
+
+<p>A masked saucer bounces left and right across a checkerboard. The checkerboard is built once, in the buffer, and copied to the screen once. Each frame the program wipes the previous saucer out of the buffer, draws the saucer in its new position, waits for the frame interrupt with <code>HALT</code>, and copies just the one character row the saucer lives on. The source is also in <code>examples/buffer_demo.asm</code>.</p>
+
+<p>Build from the project root with: <code>pasmo --tapbas examples/buffer_demo.asm buffer_demo.tap</code></p>
+
+<pre><code><span class="comment">; buffer_demo — Chapter 9 example.</span>
+<span class="comment">; A masked saucer bounces across a checkerboard background.  Everything is</span>
+<span class="comment">; composed in an off-screen buffer at $A000; one character row is copied to</span>
+<span class="comment">; the screen straight after the frame interrupt, so the beam never sees a</span>
+<span class="comment">; half-drawn sprite.</span>
+<span class="comment">; Build from the project root:  pasmo --tapbas examples/buffer_demo.asm buffer_demo.tap</span>
+    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">%00000111</span>
+    <span class="keyword">CALL</span> <span class="label">fill_screen_attr</span>
+    <span class="keyword">CALL</span> <span class="label">init_bg</span>            <span class="comment">; checkerboard into the buffer</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">0</span>               <span class="comment">; copy the whole buffer to the screen once</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">0</span>
+    <span class="keyword">LD</span>   <span class="string">D</span>, <span class="number">24</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="number">32</span>
+    <span class="keyword">CALL</span> <span class="label">copy_cells</span>
+    <span class="keyword">EI</span>
+
+<span class="label">frame:</span>
+    <span class="keyword">CALL</span> <span class="label">restore_row</span>        <span class="comment">; wipe last frame's saucer out of the buffer</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(sx)</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">96</span>              <span class="comment">; y = 96: character row 12</span>
+    <span class="keyword">LD</span>   <span class="string">IX</span>, <span class="label">saucer</span>
+    <span class="keyword">CALL</span> <span class="label">draw_sprite_masked_buf</span>
+    <span class="keyword">HALT</span>                    <span class="comment">; wait for the start of the next frame</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">12</span>              <span class="comment">; copy character row 12 while the beam is</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">0</span>               <span class="comment">; still above the picture</span>
+    <span class="keyword">LD</span>   <span class="string">D</span>, <span class="number">1</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="number">32</span>
+    <span class="keyword">CALL</span> <span class="label">copy_cells</span>
+
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(delay)</span>         <span class="comment">; move the saucer once every 3 frames</span>
+    <span class="keyword">DEC</span>  <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">(delay)</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   <span class="string">NZ</span>, <span class="label">frame</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">3</span>
+    <span class="keyword">LD</span>   <span class="string">(delay)</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(sx)</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(sdir)</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="string">B</span>
+    <span class="keyword">LD</span>   <span class="string">(sx)</span>, <span class="string">A</span>
+    <span class="keyword">CP</span>   <span class="number">240</span>                <span class="comment">; right-hand limit (16-pixel sprite)</span>
+    <span class="keyword">JR</span>   <span class="string">Z</span>, <span class="label">reverse</span>
+    <span class="keyword">OR</span>   <span class="string">A</span>                  <span class="comment">; left-hand limit</span>
+    <span class="keyword">JR</span>   <span class="string">Z</span>, <span class="label">reverse</span>
+    <span class="keyword">JR</span>   <span class="label">frame</span>
+<span class="label">reverse:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(sdir)</span>
+    <span class="keyword">NEG</span>
+    <span class="keyword">LD</span>   <span class="string">(sdir)</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   <span class="label">frame</span>
+
+<span class="comment">; init_bg — fill the buffer with a checkerboard: $AA on even scan lines,</span>
+<span class="comment">; $55 on odd ones (scan line parity is bit 0 of the high byte).</span>
+<span class="label">init_bg:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(draw_offset)</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="number">$40</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="number">0</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">24</span>              <span class="comment">; 24 high-byte values * 256 = 6144 bytes</span>
+<span class="label">ib_page:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">AND</span>  <span class="number">1</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">$AA</span>
+    <span class="keyword">JR</span>   <span class="string">Z</span>, <span class="label">ib_even</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">$55</span>
+<span class="label">ib_even:</span>
+    <span class="keyword">PUSH</span> <span class="string">BC</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">0</span>               <span class="comment">; 256 bytes</span>
+<span class="label">ib_byte:</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>
+    <span class="keyword">INC</span>  <span class="string">L</span>
+    <span class="keyword">DJNZ</span> <span class="label">ib_byte</span>
+    <span class="keyword">POP</span>  <span class="string">BC</span>
+    <span class="keyword">INC</span>  <span class="string">H</span>
+    <span class="keyword">DJNZ</span> <span class="label">ib_page</span>
+    <span class="keyword">RET</span>
+
+<span class="comment">; restore_row — redraw the checkerboard on character row 12 in the buffer.</span>
+<span class="comment">; Row 12 is row 4 of the second third: high byte base + $08, L = $80..$9F.</span>
+<span class="label">restore_row:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(draw_offset)</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="number">$48</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">8</span>               <span class="comment">; eight scan lines</span>
+<span class="label">rr_line:</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="number">$80</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">AND</span>  <span class="number">1</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">$AA</span>
+    <span class="keyword">JR</span>   <span class="string">Z</span>, <span class="label">rr_even</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">$55</span>
+<span class="label">rr_even:</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">32</span>
+<span class="label">rr_byte:</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>
+    <span class="keyword">INC</span>  <span class="string">L</span>
+    <span class="keyword">DJNZ</span> <span class="label">rr_byte</span>
+    <span class="keyword">INC</span>  <span class="string">H</span>
+    <span class="keyword">DEC</span>  <span class="string">C</span>
+    <span class="keyword">JR</span>   <span class="string">NZ</span>, <span class="label">rr_line</span>
+    <span class="keyword">RET</span>
+
+<span class="label">sx:</span>     <span class="directive">DB</span> <span class="number">0</span>
+<span class="label">sdir:</span>   <span class="directive">DB</span> <span class="number">8</span>
+<span class="label">delay:</span>  <span class="directive">DB</span> <span class="number">3</span>
+
+<span class="comment">; 16x8 masked saucer: each row is AND-hi, OR-hi, AND-lo, OR-lo</span>
+<span class="label">saucer:</span>
+    <span class="directive">DB</span>  <span class="number">8</span>, <span class="number">2</span>
+    <span class="directive">DB</span>  <span class="number">$F8</span>, <span class="number">$04</span>, <span class="number">$1F</span>, <span class="number">$20</span>
+    <span class="directive">DB</span>  <span class="number">$E0</span>, <span class="number">$1B</span>, <span class="number">$07</span>, <span class="number">$D8</span>
+    <span class="directive">DB</span>  <span class="number">$C0</span>, <span class="number">$3F</span>, <span class="number">$03</span>, <span class="number">$FC</span>
+    <span class="directive">DB</span>  <span class="number">$00</span>, <span class="number">$FF</span>, <span class="number">$00</span>, <span class="number">$FF</span>
+    <span class="directive">DB</span>  <span class="number">$00</span>, <span class="number">$6D</span>, <span class="number">$00</span>, <span class="number">$B6</span>
+    <span class="directive">DB</span>  <span class="number">$C0</span>, <span class="number">$1F</span>, <span class="number">$03</span>, <span class="number">$F8</span>
+    <span class="directive">DB</span>  <span class="number">$E6</span>, <span class="number">$19</span>, <span class="number">$67</span>, <span class="number">$98</span>
+    <span class="directive">DB</span>  <span class="number">$DF</span>, <span class="number">$20</span>, <span class="number">$FB</span>, <span class="number">$04</span>
+
+    <span class="directive">INCLUDE</span> <span class="string">"lib/calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/fill_screen_attr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/draw_sprite_masked_buf.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/copy_cells.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<h3>Walkthrough</h3>
+
+<p><strong>Background.</strong> <code>init_bg</code> fills the buffer one 256-byte page at a time. Bit 0 of the high byte is bit 0 of the scan line number, so alternating pages get <code>$AA</code> and <code>$55</code>, giving a checkerboard on every scan-line pair. <code>restore_row</code> redraws the same pattern on character row 12 only, which is cheaper than redrawing the whole background: this is how the sprite is erased.</p>
+
+<p><strong>Frame order.</strong> The expensive work — restoring the row and drawing the sprite — comes <em>before</em> <code>HALT</code>, while the previous frame is being displayed. The only thing after <code>HALT</code> is the short copy. If the drawing ever took longer than a frame, <code>HALT</code> would simply wait for the following frame and the animation would slow down; it could never tear. The position is updated only once every third frame so that the 8-pixel steps are easy to follow.</p>
+
+<p><strong>Why the copy is safe.</strong> Row 12 starts at pixel row 96, so the beam does not reach it until 14,336&nbsp;+&nbsp;224&nbsp;&times;&nbsp;96&nbsp;=&nbsp;35,840 T-states after the interrupt. The copy begins within a couple of thousand T-states of the interrupt and takes roughly 6,500, so it finishes with plenty of margin.</p>
 
 <h2 id="9-page-flipping">Page Flipping</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p>Copying from a buffer is the best a 48K machine can do, and it only works well for small areas. The 128K Spectrum offers something better: <strong>two complete screens</strong>, and a hardware switch that chooses which one the ULA displays. Instead of copying a finished frame onto the screen, you draw into the screen that is <em>not</em> being displayed and then flip the switch. The flip costs a few T-states, whatever the size of the picture.</p>
+
+<table>
+<tr><th>Screen</th><th>RAM bank</th><th>Address (when paged in)</th><th>Attributes at</th></tr>
+<tr><td>Normal screen</td><td>5</td><td><code>$4000</code> (always)</td><td><code>$5800</code></td></tr>
+<tr><td>Shadow screen</td><td>7</td><td><code>$C000</code> (bank 7 paged in)</td><td><code>$D800</code></td></tr>
+</table>
+
+<p>Port <code>$7FFD</code> controls the memory layout. Bits 0&ndash;2 choose which RAM bank appears at <code>$C000</code>, <strong>bit 3 chooses which screen the ULA displays</strong> (0 = bank 5, 1 = bank 7), bit 4 selects the ROM, and bit 5 locks the paging. The ROM keeps a copy of the last value written in the system variable <code>BANKM</code> (<code>$5B5C</code>), and a program must update it with every write or any ROM routine that does its own paging will undo the change.</p>
+
+<h3>flip_screen.asm</h3>
+
+<pre><code><span class="comment">; flip_screen / init_page_flip</span>
+<span class="comment">; 128K Spectrum only.  The 128K machine has two screens: the normal one in</span>
+<span class="comment">; bank 5 (always at $4000) and a shadow screen in bank 7.  Bit 3 of port $7FFD</span>
+<span class="comment">; chooses which one the ULA displays.  Bank 7 can be written through the</span>
+<span class="comment">; $C000–$FFFF window, so with bank 7 paged in the program can draw into the</span>
+<span class="comment">; hidden screen at $C000 and then flip.</span>
+<span class="comment">;</span>
+<span class="comment">; init_page_flip: page bank 7 in at $C000, display bank 5, draw to bank 7.</span>
+<span class="comment">; flip_screen:    swap the displayed screen and retarget draw_offset at the</span>
+<span class="comment">;                 screen that is now hidden.  Call it straight after a HALT.</span>
+<span class="comment">; Input: none      Output: none      Destroys: A, B, C</span>
+<span class="comment">; Requires draw_sprite_masked_buf.asm (for draw_offset).</span>
+<span class="label">BANKM</span> <span class="directive">EQU</span> <span class="number">$5B5C</span>            <span class="comment">; 128K system variable: copy of the last OUT to port $7FFD</span>
+
+<span class="label">init_page_flip:</span>
+    <span class="keyword">DI</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(BANKM)</span>
+    <span class="keyword">AND</span>  <span class="number">%11110000</span>         <span class="comment">; keep the ROM-select (bit 4) and paging-lock (bit 5) bits</span>
+    <span class="keyword">OR</span>   <span class="number">%00000111</span>         <span class="comment">; bits 2-0 = 7: bank 7 at $C000; bit 3 = 0: show bank 5</span>
+    <span class="keyword">LD</span>   <span class="string">(BANKM)</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">BC</span>, <span class="number">$7FFD</span>
+    <span class="keyword">OUT</span>  <span class="string">(C)</span>, <span class="string">A</span>
+    <span class="keyword">EI</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">$80</span>            <span class="comment">; displayed = bank 5, so draw into $C000</span>
+    <span class="keyword">LD</span>   <span class="string">(draw_offset)</span>, <span class="string">A</span>
+    <span class="keyword">RET</span>
+
+<span class="label">flip_screen:</span>
+    <span class="keyword">DI</span>                     <span class="comment">; the update of BANKM and the port must stay together</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(BANKM)</span>
+    <span class="keyword">XOR</span>  <span class="number">%00001000</span>         <span class="comment">; bit 3: 0 = display bank 5, 1 = display bank 7</span>
+    <span class="keyword">LD</span>   <span class="string">(BANKM)</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">BC</span>, <span class="number">$7FFD</span>
+    <span class="keyword">OUT</span>  <span class="string">(C)</span>, <span class="string">A</span>
+    <span class="keyword">EI</span>
+    <span class="keyword">AND</span>  <span class="number">%00001000</span>         <span class="comment">; Z set: bank 5 is now displayed, so draw to bank 7</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">$80</span>            <span class="comment">; (LD does not touch the flags)</span>
+    <span class="keyword">JR</span>   <span class="string">Z</span>, <span class="label">fs_store</span>
+    <span class="keyword">XOR</span>  <span class="string">A</span>                 <span class="comment">; bank 7 is displayed: draw straight to $4000</span>
+<span class="label">fs_store:</span>
+    <span class="keyword">LD</span>   <span class="string">(draw_offset)</span>, <span class="string">A</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>lib/flip_screen.asm</strong>; it requires <code>draw_sprite_masked_buf.asm</code> for <code>draw_offset</code>. <code>init_page_flip</code> maps bank 7 at <code>$C000</code>, displays bank 5, and points <code>draw_offset</code> at <code>$80</code> — so <code>draw_sprite_masked_buf</code> adds <code>$80</code> to a <code>$4x</code> address and lands at <code>$Cx</code>. <code>flip_screen</code> toggles bit 3, writes the new value to both <code>BANKM</code> and the port, and then retargets <code>draw_offset</code>: <code>$80</code> when bank 5 is on show (draw into bank 7), <code>$00</code> when bank 7 is on show (draw straight to <code>$4000</code>). Interrupts are disabled around the update so an interrupt cannot fall between the two writes.</p>
+
+<p>A complete frame then looks like this:</p>
+
+<pre><code>    <span class="keyword">CALL</span> <span class="label">init_page_flip</span>      <span class="comment">; once, at the start</span>
+    <span class="keyword">EI</span>
+<span class="label">frame:</span>
+    <span class="keyword">CALL</span> <span class="label">clear_buffer</span>        <span class="comment">; wipe the hidden screen</span>
+    ...                      <span class="comment">; draw the whole frame with draw_sprite_masked_buf</span>
+    <span class="keyword">HALT</span>                     <span class="comment">; wait for the start of the next frame</span>
+    <span class="keyword">CALL</span> <span class="label">flip_screen</span>         <span class="comment">; show it; the screen just shown becomes the target</span>
+    <span class="keyword">JR</span>   <span class="label">frame</span></code></pre>
+
+<p>There are four things to remember. <strong>It needs a 128K machine</strong> — on a 48K Spectrum port <code>$7FFD</code> does nothing, and <code>$C000</code> is ordinary RAM. <strong>Each screen has its own attribute area</strong>, so the colours at <code>$5800</code> must be copied to <code>$D800</code> (<code>LDIR</code>, 768 bytes) before the first flip, and every later colour change must be made on the hidden page. <strong>Banks&nbsp;1, 3, 5 and&nbsp;7 are contended</strong> on the 128K machine, so code and data accessed there run slower when the ULA is reading it. And <strong>the flip happens after <code>HALT</code></strong>, so if drawing takes longer than a frame the program simply misses a flip and runs at 25 frames per second — still without tearing, which is the whole point.</p>
+
+<p>The code in this section has not been run on 128K hardware or an emulator: build it, and test it on your own.</p>
+
+<h3>Choosing a Technique</h3>
+
+<table>
+<tr><th>Technique</th><th>Machine</th><th>Cost per frame</th><th>Best for</th></tr>
+<tr><td>Draw directly, erase and redraw</td><td>any</td><td>none</td><td>one or two small sprites (tears if the beam catches it)</td></tr>
+<tr><td>Off-screen buffer + <code>copy_cells</code></td><td>48K</td><td>copy time of the changed cells</td><td>a few sprites in a limited area</td></tr>
+<tr><td>Page flipping</td><td>128K only</td><td>one port write</td><td>full-screen redraws, many sprites, scrolling</td></tr>
+</table>
+
+<h3>Chapter 9 Library Summary</h3>
+
+<table>
+<tr><th>File</th><th>Input</th><th>Does</th></tr>
+<tr><td><code>draw_sprite_masked_buf.asm</code></td><td>B = y, C = x, IX = sprite</td><td>Masked sprite into the buffer (or any page chosen by <code>draw_offset</code>)</td></tr>
+<tr><td><code>clear_buffer.asm</code></td><td>none</td><td>Clears the current draw target</td></tr>
+<tr><td><code>copy_cells.asm</code></td><td>B = row, C = col, D = rows, E = cols</td><td>Copies a cell rectangle from buffer to screen</td></tr>
+<tr><td><code>flip_screen.asm</code></td><td>none</td><td>128K: <code>init_page_flip</code> and <code>flip_screen</code></td></tr>
+</table>
+
+<p class="bold-text">Key fact: the beam never waits. Do the slow work off-screen, and show it only when it is finished: either by copying just the cells that changed straight after <code>HALT</code>, or, on a 128K machine, by flipping a whole screen with one port write.</p>
 </section>
 
 <section id="10-optimisation">
 <h1>10. Graphics Optimisation</h1>
 <a href="#" class="back-to-top">^ Back to top</a>
 
+<p>A Spectrum frame is 69,888 T-states. Clearing the screen the obvious way takes nearly two of them. This chapter is about where that time goes and three standard ways to win it back: choosing the right block-copy method, unrolling loops, and replacing calculations with table look-ups. Each technique trades something — code size, memory or flexibility — for speed, so the chapter also says when <em>not</em> to use it.</p>
+
 <h2 id="10-ldir">Using LDIR for Block Copies</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p><code>LDIR</code> is the Z80's block-copy instruction: it copies the byte at (HL) to (DE), increments both, decrements BC, and repeats until BC is zero. One instruction replaces a loop, and it is what <code>scroll_up_char</code> and <code>clear_buffer</code> use. Three rules keep it safe:</p>
+
+<ul>
+<li><strong>BC&nbsp;=&nbsp;0 means 65,536 bytes</strong>, not zero. Check the count first if it can be zero.</li>
+<li><strong>Overlapping copies have a direction.</strong> If the destination is above the source and the blocks overlap, <code>LDIR</code> overwrites bytes before it reads them; copy backwards with <code>LDDR</code>, starting at the ends of the blocks.</li>
+<li><strong>A fill is a copy onto itself.</strong> Store the value in the first byte and set DE&nbsp;=&nbsp;HL&nbsp;+&nbsp;1: each copied byte becomes the source of the next. <code>clear_buffer</code> does this.</li>
+</ul>
+
+<p>But <code>LDIR</code> is not fast. It takes 21 T-states for every byte it copies (16 for the last). Here is what a full 6,144-byte screen costs with each method, using the fastest loop of each kind:</p>
+
+<table>
+<tr><th>Method</th><th>T-states per byte</th><th>6,144 bytes</th><th>Frames</th></tr>
+<tr><td><code>LDIR</code></td><td>21</td><td>129,019</td><td>1.85</td></tr>
+<tr><td>unrolled <code>LDI</code> (no repeat)</td><td>16</td><td>98,304</td><td>1.41</td></tr>
+<tr><td>unrolled <code>LD (HL),A / INC HL</code> (fill only)</td><td>13</td><td>79,872</td><td>1.14</td></tr>
+<tr><td><code>PUSH HL</code> (fill only)</td><td>5.5</td><td>33,792</td><td>0.48</td></tr>
+</table>
+
+<p>The reason <code>PUSH</code> wins is that it writes <em>two</em> bytes in 11 T-states and needs no pointer increment: the stack pointer decrements itself. The trick is to aim SP at the screen. The stack grows downwards, so start at the end of the area to fill and push towards the start.</p>
+
+<h3>clear_screen_fast.asm</h3>
+
+<pre><code><span class="comment">; clear_screen_fast</span>
+<span class="comment">; Clear the whole 6144-byte display file by pushing zeros onto the screen.</span>
+<span class="comment">; PUSH HL writes two bytes in 11 T-states (5.5 per byte); LDIR needs 21.</span>
+<span class="comment">; Input:  none      Output: none</span>
+<span class="comment">; Destroys: B, H, L.  Leaves interrupts ENABLED.</span>
+<span class="comment">; Interrupts are disabled while SP points into the display file, because an</span>
+<span class="comment">; interrupt would push its return address on top of the pixels.</span>
+<span class="label">clear_screen_fast:</span>
+    <span class="keyword">DI</span>
+    <span class="keyword">LD</span>   <span class="string">(csf_sp)</span>, <span class="string">SP</span>      <span class="comment">; save the real stack pointer</span>
+    <span class="keyword">LD</span>   <span class="string">SP</span>, <span class="number">$5800</span>         <span class="comment">; one past the end of the display file</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, <span class="number">0</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">192</span>            <span class="comment">; 192 passes of 16 PUSHes = 192 * 32 bytes = 6144</span>
+<span class="label">csf_loop:</span>
+    <span class="directive">REPT</span> <span class="number">16</span>
+    <span class="keyword">PUSH</span> <span class="string">HL</span>                <span class="comment">; SP -= 2, (SP) = HL: two zero bytes</span>
+    <span class="directive">ENDM</span>
+    <span class="keyword">DJNZ</span> <span class="label">csf_loop</span>
+    <span class="keyword">LD</span>   <span class="string">SP</span>, <span class="string">(csf_sp)</span>      <span class="comment">; restore the real stack</span>
+    <span class="keyword">EI</span>
+    <span class="keyword">RET</span>
+<span class="label">csf_sp:</span> <span class="directive">DW</span> <span class="number">0</span></code></pre>
+
+<p>Save this as <strong>lib/clear_screen_fast.asm</strong>. Note the three safety rules for stack tricks. <strong>Interrupts must be off</strong> while SP points into the display file: an interrupt pushes its return address on the stack, and the ROM's handler would write over your pixels. <strong>SP must be saved and restored</strong> — here through a memory variable — or the <code>RET</code> would jump to an arbitrary place. And <strong>the routine ends with <code>EI</code></strong>, so it is only for programs that run with interrupts enabled; that is true of every example in this book.</p>
+
+<p>The inner block of 16 <code>PUSH HL</code>s is produced by the assembler's <code>REPT 16 ... ENDM</code> repetition directive (pasmo syntax; other assemblers call it <code>DUP</code>/<code>EDUP</code> or similar), and <code>DJNZ</code> repeats it 192 times: 192&nbsp;&times;&nbsp;32&nbsp;=&nbsp;6,144 bytes. HL does not have to be zero: any 16-bit pattern can be pushed, so the same routine fills the screen with a stripe or checkerboard pattern, and the same idea with SP&nbsp;=&nbsp;<code>$5B00</code> and 384 pushes fills the attribute file.</p>
+
+<p>This trick only fills; it cannot copy, because the data has to come from somewhere other than SP. For copies the choice is <code>LDIR</code> (small and convenient) or a run of unrolled <code>LDI</code>s (about a quarter faster, but 2 bytes of code per byte copied).</p>
 
 <h2 id="10-unrolling">Loop Unrolling</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p>Look at the cost of a simple fill loop, such as the inner loop of <code>fill_screen_attr</code>:</p>
+
+<pre><code><span class="label">inner:</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>      <span class="comment">; 7 T-states: the useful work</span>
+    <span class="keyword">INC</span>  <span class="string">HL</span>           <span class="comment">; 6</span>
+    <span class="keyword">DJNZ</span> <span class="label">inner</span>        <span class="comment">; 13: the loop overhead</span></code></pre>
+
+<p>Only 7 of the 26 T-states per byte do any work; the <code>INC HL</code> and especially the 13-T-state <code>DJNZ</code> are overhead. <strong>Unrolling</strong> means writing the body several times in a row, so the <code>DJNZ</code> is paid once per several bytes instead of once per byte:</p>
+
+<pre><code><span class="comment">; fill_screen_attr_fast</span>
+<span class="comment">; Same job as fill_screen_attr, with the inner loop unrolled eight times.</span>
+<span class="comment">; Input:  A = attribute byte</span>
+<span class="comment">; Output: none</span>
+<span class="comment">; Destroys: B, HL</span>
+<span class="label">fill_screen_attr_fast:</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, <span class="number">$5800</span>        <span class="comment">; start of attribute file</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">96</span>            <span class="comment">; 96 passes of 8 bytes = 768 bytes</span>
+<span class="label">fsaf_loop:</span>
+    <span class="directive">REPT</span> <span class="number">8</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">A</span>
+    <span class="keyword">INC</span>  <span class="string">HL</span>
+    <span class="directive">ENDM</span>
+    <span class="keyword">DJNZ</span> <span class="label">fsaf_loop</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>lib/fill_screen_attr_fast.asm</strong>. It is a drop-in replacement for <code>fill_screen_attr</code>. Eight bytes now cost 8&nbsp;&times;&nbsp;13&nbsp;+&nbsp;13&nbsp;=&nbsp;117 T-states, about 14.6 per byte, so filling the 768 attribute bytes takes roughly 11,000 T-states instead of 20,000. The returns diminish quickly:</p>
+
+<table>
+<tr><th>Copies of the body</th><th>T-states per byte</th><th>Code per iteration</th></tr>
+<tr><td>1 (the plain loop)</td><td>26.0</td><td>4 bytes</td></tr>
+<tr><td>2</td><td>19.5</td><td>6 bytes</td></tr>
+<tr><td>4</td><td>16.3</td><td>10 bytes</td></tr>
+<tr><td>8</td><td>14.6</td><td>18 bytes</td></tr>
+<tr><td>16</td><td>13.8</td><td>34 bytes</td></tr>
+<tr><td>&infin; (fully unrolled)</td><td>13.0</td><td>2 bytes per byte filled</td></tr>
+</table>
+
+<p>Most of the gain comes in the first doubling or two; beyond 8 copies you are spending memory for under a T-state per byte. The count must divide the amount of work evenly (96&nbsp;&times;&nbsp;8&nbsp;=&nbsp;768 here), or you need a separate leftover loop.</p>
+
+<h3>Where to Unroll</h3>
+
+<p>Unroll <strong>inner loops that run thousands of times per frame</strong>, and nothing else. A horizontal scroll is a good candidate: the inner loop of <code>scroll_left_pixel</code> does <code>RL (HL) / DEC L / DJNZ</code>, which is 15&nbsp;+&nbsp;4&nbsp;+&nbsp;13&nbsp;=&nbsp;32 T-states per byte. A row is exactly 32 bytes, so writing <code>RL (HL) / DEC L</code> 32 times in a row removes the <code>DJNZ</code> entirely and cuts the cost to 19 T-states per byte — about 41% less, and the whole scroll falls from roughly 56&nbsp;ms to roughly 33&nbsp;ms. The price is 96 bytes of code instead of 5. Try it as an exercise; the hard part is the carry flag, which must flow through the whole run unharmed (<code>DEC L</code> does not touch the carry flag, which is why this works).</p>
+
+<p>Do <em>not</em> unroll code that runs rarely, code that is already dominated by something else (such as an <code>LDIR</code>), or code where the loop count varies — unless the variable part is handled by jumping into the middle of the unrolled block, a classic trick known as Duff's device.</p>
 
 <h2 id="10-lookup-tables">Lookup Tables for Screen Addresses</h2>
-<p class="coming-soon">Coming soon.</p>
+
+<p>Every call to <code>calc_pixel_addr</code> works out the same bit-shuffling from scratch: about 150 T-states, plus 17 for every bit of <code>x</code> mod&nbsp;8 in the mask-shift loop. For code that needs one address per pixel, such as <code>draw_circle</code> or <code>draw_line</code>, that is where nearly all the time goes. A <strong>lookup table</strong> does the work once, at start-up, and turns every later calculation into a memory read.</p>
+
+<p>There are only 192 pixel rows, and the address of the start of each row never changes. A table of 192 two-byte addresses costs 384 bytes of RAM:</p>
+
+<h3>build_row_table.asm</h3>
+
+<pre><code><span class="comment">; build_row_table</span>
+<span class="comment">; Fill a 192-entry table of display-file row addresses.</span>
+<span class="comment">; Entry y (two bytes, low byte first) is the address of the first byte of</span>
+<span class="comment">; pixel row y.  Needs 384 bytes at row_table, which the program must define</span>
+<span class="comment">; with EQU (or allocate itself) before including this file.</span>
+<span class="comment">; Input:  none      Output: none</span>
+<span class="comment">; Destroys: A, B, C, D, E, H, L</span>
+<span class="comment">; Requires calc_pixel_addr.asm.</span>
+<span class="label">build_row_table:</span>
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="label">row_table</span>     <span class="comment">; DE = where the next entry goes</span>
+    <span class="keyword">XOR</span>  <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">(brt_y)</span>, <span class="string">A</span>
+<span class="label">brt_loop:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(brt_y)</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="string">A</span>              <span class="comment">; B = y</span>
+    <span class="keyword">LD</span>   <span class="string">C</span>, <span class="number">0</span>              <span class="comment">; C = x = 0</span>
+    <span class="keyword">PUSH</span> <span class="string">DE</span>
+    <span class="keyword">CALL</span> <span class="label">calc_pixel_addr</span>   <span class="comment">; HL = address of the start of row y</span>
+    <span class="keyword">POP</span>  <span class="string">DE</span>
+    <span class="keyword">EX</span>   <span class="string">DE</span>, <span class="string">HL</span>            <span class="comment">; HL = table pointer, DE = row address</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">E</span>           <span class="comment">; low byte</span>
+    <span class="keyword">INC</span>  <span class="string">HL</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="string">D</span>           <span class="comment">; high byte</span>
+    <span class="keyword">INC</span>  <span class="string">HL</span>
+    <span class="keyword">EX</span>   <span class="string">DE</span>, <span class="string">HL</span>            <span class="comment">; DE = table pointer again</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(brt_y)</span>
+    <span class="keyword">INC</span>  <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">(brt_y)</span>, <span class="string">A</span>
+    <span class="keyword">CP</span>   <span class="number">192</span>
+    <span class="keyword">JR</span>   <span class="string">NZ</span>, <span class="label">brt_loop</span>
+    <span class="keyword">RET</span>
+<span class="label">brt_y:</span> <span class="directive">DB</span> <span class="number">0</span></code></pre>
+
+<p>Save this as <strong>lib/build_row_table.asm</strong>; it requires <code>calc_pixel_addr.asm</code>. The program must define <code>row_table</code> (for example <code>row_table EQU $9000</code>) and keep 384 bytes free there. Call <code>build_row_table</code> once; it uses the routine you already trust to generate the data, so the table cannot disagree with it.</p>
+
+<h3>get_row_addr.asm</h3>
+
+<pre><code><span class="comment">; get_row_addr</span>
+<span class="comment">; Look up the display-file address of the start of pixel row y.</span>
+<span class="comment">; Input:  B  = y (0–191)</span>
+<span class="comment">; Output: HL = address of the first byte of that row</span>
+<span class="comment">; Destroys: DE</span>
+<span class="comment">; Requires the table built by build_row_table.</span>
+<span class="label">get_row_addr:</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="number">0</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="string">B</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">HL</span>            <span class="comment">; y * 2: each entry is a word</span>
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="label">row_table</span>
+    <span class="keyword">ADD</span>  <span class="string">HL</span>, <span class="string">DE</span>            <span class="comment">; HL = address of the table entry</span>
+    <span class="keyword">LD</span>   <span class="string">E</span>, <span class="string">(HL)</span>
+    <span class="keyword">INC</span>  <span class="string">HL</span>
+    <span class="keyword">LD</span>   <span class="string">D</span>, <span class="string">(HL)</span>
+    <span class="keyword">EX</span>   <span class="string">DE</span>, <span class="string">HL</span>            <span class="comment">; HL = row address</span>
+    <span class="keyword">RET</span></code></pre>
+
+<p>Save this as <strong>lib/get_row_addr.asm</strong>. Doubling y gives the byte offset of the entry, because each entry is two bytes. The whole look-up costs about 77 T-states, plus 17 for the <code>CALL</code> — and unlike <code>calc_pixel_addr</code> its speed does not depend on x. Add the column byte (<code>x / 8</code>) to L to reach any byte on the row, which is always safe because a row never crosses a 256-byte boundary.</p>
+
+<p>The same idea applies wherever the answer comes from a small set of possibilities:</p>
+<ul>
+<li><strong>Pixel masks:</strong> a table of the eight values <code>$80, $40, ... $01</code> replaces the shift loop in <code>calc_pixel_addr</code>. If the table starts on a 256-byte boundary, the look-up is just <code>AND 7 / LD L, A / LD H, high_byte / LD A, (HL)</code>.</li>
+<li><strong>Attribute rows:</strong> 24 entries give the address of each attribute row.</li>
+<li><strong>Pre-shifted sprites:</strong> eight copies of a sprite, one for each pixel offset within a byte, so a sprite at any x position is drawn with the OR/AND loop instead of shifting every byte at run time. This trades memory (eight times the sprite data) for speed.</li>
+<li><strong>Multiplication, sine and square tables</strong> for anything that multiplies or rotates.</li>
+</ul>
+
+<p>The cost to weigh is memory. 384 bytes is cheap on a 48K machine and a bargain next to the time saved, but pre-shifted sprites multiply every sprite by eight, and a 16-bit table costs two bytes per entry.</p>
+
+<h2 id="10-examples">Complete Examples: speed_demo.asm and lookup_demo.asm</h2>
+
+<h3>speed_demo.asm</h3>
+
+<p>This program clears the screen with <code>LDIR</code> and then with <code>clear_screen_fast</code>, in a loop, with a different border colour around each. Build from the project root with: <code>pasmo --tapbas examples/speed_demo.asm speed_demo.tap</code></p>
+
+<pre><code><span class="comment">; speed_demo — Chapter 10 example.</span>
+<span class="comment">; The border colour is switched around each routine, so the height of the</span>
+<span class="comment">; coloured band is how long the routine takes.  Red = LDIR clear (about 1.9</span>
+<span class="comment">; frames), green = PUSH clear (about half a frame).</span>
+<span class="comment">; Build from the project root:  pasmo --tapbas examples/speed_demo.asm speed_demo.tap</span>
+    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">main:</span>
+    <span class="keyword">EI</span>
+<span class="label">loop:</span>
+    <span class="keyword">HALT</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">2</span>               <span class="comment">; red border</span>
+    <span class="keyword">OUT</span>  <span class="string">($FE)</span>, <span class="string">A</span>
+    <span class="keyword">CALL</span> <span class="label">clear_screen_ldir</span>
+    <span class="keyword">XOR</span>  <span class="string">A</span>                  <span class="comment">; black border</span>
+    <span class="keyword">OUT</span>  <span class="string">($FE)</span>, <span class="string">A</span>
+
+    <span class="keyword">HALT</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="number">4</span>               <span class="comment">; green border</span>
+    <span class="keyword">OUT</span>  <span class="string">($FE)</span>, <span class="string">A</span>
+    <span class="keyword">CALL</span> <span class="label">clear_screen_fast</span>
+    <span class="keyword">XOR</span>  <span class="string">A</span>
+    <span class="keyword">OUT</span>  <span class="string">($FE)</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   <span class="label">loop</span>
+
+<span class="label">clear_screen_ldir:</span>
+    <span class="keyword">LD</span>   <span class="string">HL</span>, <span class="number">$4000</span>
+    <span class="keyword">LD</span>   <span class="string">DE</span>, <span class="number">$4001</span>
+    <span class="keyword">LD</span>   <span class="string">BC</span>, <span class="number">6143</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="number">0</span>
+    <span class="keyword">LDIR</span>
+    <span class="keyword">RET</span>
+
+    <span class="directive">INCLUDE</span> <span class="string">"lib/clear_screen_fast.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>Both clears start right after a <code>HALT</code>, so each coloured band starts at the top of the frame and its length is the duration. The <code>LDIR</code> clear takes about 1.85 frames, so the red border fills the entire frame and carries over into the next; the <code>PUSH</code> clear takes about half a frame, so the green band covers roughly the upper half of the border. The screen flickers black as it is cleared, as you would expect.</p>
+
+<h3>lookup_demo.asm</h3>
+
+<p>This program builds the table, clears the screen, and draws a full-width line on every sixth pixel row using <code>get_row_addr</code>. Build from the project root with: <code>pasmo --tapbas examples/lookup_demo.asm lookup_demo.tap</code></p>
+
+<pre><code><span class="comment">; lookup_demo — Chapter 10 example.</span>
+<span class="comment">; Draws a full-width line on every sixth pixel row, finding each row's</span>
+<span class="comment">; address with the lookup table instead of calc_pixel_addr.</span>
+<span class="comment">; Build from the project root:  pasmo --tapbas examples/lookup_demo.asm lookup_demo.tap</span>
+    <span class="directive">ORG</span>  <span class="number">$8000</span>
+
+<span class="label">row_table</span> <span class="directive">EQU</span> <span class="number">$9000</span>         <span class="comment">; 192 entries * 2 bytes = 384 bytes</span>
+
+<span class="label">main:</span>
+    <span class="keyword">CALL</span> <span class="label">build_row_table</span>
+    <span class="keyword">CALL</span> <span class="label">clear_screen_fast</span>
+    <span class="keyword">XOR</span>  <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">(ly)</span>, <span class="string">A</span>
+<span class="label">ld_next:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(ly)</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="string">A</span>
+    <span class="keyword">CALL</span> <span class="label">get_row_addr</span>       <span class="comment">; HL = start of pixel row y</span>
+    <span class="keyword">LD</span>   <span class="string">B</span>, <span class="number">32</span>              <span class="comment">; 32 bytes across the row</span>
+<span class="label">ld_fill:</span>
+    <span class="keyword">LD</span>   <span class="string">(HL)</span>, <span class="number">$FF</span>
+    <span class="keyword">INC</span>  <span class="string">L</span>                  <span class="comment">; safe: a row never crosses a 256-byte boundary</span>
+    <span class="keyword">DJNZ</span> <span class="label">ld_fill</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(ly)</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="number">6</span>
+    <span class="keyword">LD</span>   <span class="string">(ly)</span>, <span class="string">A</span>
+    <span class="keyword">CP</span>   <span class="number">192</span>
+    <span class="keyword">JR</span>   <span class="string">C</span>, <span class="label">ld_next</span>
+    <span class="keyword">EI</span>
+<span class="label">ld_done:</span>
+    <span class="keyword">HALT</span>
+    <span class="keyword">JR</span>   <span class="label">ld_done</span>
+
+<span class="label">ly:</span> <span class="directive">DB</span> <span class="number">0</span>
+
+    <span class="directive">INCLUDE</span> <span class="string">"lib/calc_pixel_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/build_row_table.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/get_row_addr.asm"</span>
+    <span class="directive">INCLUDE</span> <span class="string">"lib/clear_screen_fast.asm"</span>
+
+    <span class="directive">END</span>  <span class="number">$8000</span></code></pre>
+
+<p>You will see 32 evenly spaced horizontal white lines across the screen. Each line is found by one table look-up and written with <code>INC L</code>; no call to <code>calc_pixel_addr</code> is made after start-up.</p>
+
+<h3>Chapter 10 Library Summary</h3>
+
+<table>
+<tr><th>File</th><th>Input</th><th>Does</th></tr>
+<tr><td><code>clear_screen_fast.asm</code></td><td>none</td><td>Clears the display file with <code>PUSH</code> (about 0.5 frames)</td></tr>
+<tr><td><code>fill_screen_attr_fast.asm</code></td><td>A = attribute</td><td>Unrolled attribute fill</td></tr>
+<tr><td><code>build_row_table.asm</code></td><td>none (needs <code>row_table</code>)</td><td>Builds the 192-entry row-address table</td></tr>
+<tr><td><code>get_row_addr.asm</code></td><td>B = y</td><td>HL = address of the start of pixel row y</td></tr>
+</table>
+
+<p class="bold-text">Key fact: measure first. Put a border colour around the code you suspect, and spend effort only on the loops that fill the frame. Then pick the tool: <code>PUSH</code> for fills, unrolling for inner loops, tables for repeated calculations, and plain <code>LDIR</code> for everything else.</p>
 </section>
 
 </body>

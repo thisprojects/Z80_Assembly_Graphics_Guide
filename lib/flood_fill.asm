@@ -3,6 +3,7 @@
 ; Input:  B = y  (0–191)
 ;         C = x  (0–255)
 ; Fills all unset pixels reachable from (x,y) by 4-connectivity.
+; The fill stops at the left and right screen edges (x does not wrap).
 ; Warning: stack depth grows with fill area. Safe for small regions only.
 ; Destroys: A, B, C, H, L (and uses stack heavily)
 flood_fill:
@@ -37,14 +38,19 @@ flood_fill:
     CALL flood_fill
     POP  BC
 
-    ; recurse: left (x-1)
+    ; recurse: left (x-1) — skip if already at x = 0 (DEC would wrap to 255)
+    LD   A, C
+    OR   A
+    JR   Z, ff_no_left
     PUSH BC
     DEC  C
     CALL flood_fill
     POP  BC
+ff_no_left:
 
-    ; recurse: right (x+1)
+    ; recurse: right (x+1) — INC wraps 255 to 0 and sets Z: off the right edge
     INC  C
+    RET  Z
     JP   flood_fill        ; tail call — no PUSH/POP needed for last branch
 
 ff_already_set:

@@ -23,10 +23,13 @@ draw_rect:
     POP  DE
     POP  BC
 
-    ; Skip vertical edges if height is 1 (y1 == y2)
-    LD   A, B
-    CP   D                 ; y1 == y2?
-    JR   Z, dr_no_vert
+    ; Skip vertical edges if there are no interior rows (y2 - y1 < 2).
+    ; With height 1 or 2 the hlines already cover every row; calling
+    ; draw_vline with y1+1 > y2-1 would give a count of 0 and loop 256 times.
+    LD   A, D
+    SUB  B                 ; y2 - y1
+    CP   2
+    JR   C, dr_no_vert
 
     ; Left edge: x=x1, y1+1 to y2-1
     PUSH BC

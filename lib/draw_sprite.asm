@@ -14,6 +14,8 @@
 ; Destroys: A, B, C, D, E, H, L, IX
 draw_sprite:
     LD   A, (IX+0)         ; read height from sprite header
+    OR   A                 ; height = 0?
+    RET  Z                 ; nothing to draw (else DEC would wrap to 255 rows)
     LD   (ds_rows), A      ; store as row-down counter
     LD   A, (IX+1)         ; read byte-width from sprite header
     LD   (ds_width), A
