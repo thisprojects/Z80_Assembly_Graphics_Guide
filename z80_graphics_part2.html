@@ -523,8 +523,11 @@ tr.highlight-row {
 <pre><code><span class="comment">; XOR-erase variant of draw_sprite</span>
 <span class="comment">; Call once to draw; call again at the same position to erase.</span>
 <span class="comment">; Input/destroys: same as draw_sprite</span>
+<span class="comment">; Requires draw_sprite.asm (shares its ds_rows / ds_width variables).</span>
 <span class="label">draw_sprite_xor:</span>
     <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+0)</span>
+    <span class="keyword">OR</span>   <span class="string">A</span>
+    <span class="keyword">RET</span>  <span class="string">Z</span>                 <span class="comment">; height = 0: nothing to draw</span>
     <span class="keyword">LD</span>   <span class="string">(ds_rows)</span>, <span class="string">A</span>
     <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(IX+1)</span>
     <span class="keyword">LD</span>   <span class="string">(ds_width)</span>, <span class="string">A</span>
@@ -543,7 +546,33 @@ tr.highlight-row {
     <span class="keyword">INC</span>  <span class="string">L</span>
     <span class="keyword">DJNZ</span> <span class="label">dsx_col_loop</span>
     <span class="keyword">POP</span>  <span class="string">HL</span>
-    <span class="comment">; … row-advance logic identical to draw_sprite …</span></code></pre>
+
+<span class="comment">    ; Advance HL to the next pixel row (same logic as draw_sprite)</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">AND</span>  <span class="string">$07</span>
+    <span class="keyword">CP</span>   <span class="string">$07</span>
+    <span class="keyword">JR</span>   Z, <span class="label">dsx_cross</span>
+    <span class="keyword">INC</span>  <span class="string">H</span>
+    <span class="keyword">JR</span>   <span class="label">dsx_row_dec</span>
+
+<span class="label">dsx_cross:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">AND</span>  <span class="string">$F8</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">L</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="string">$20</span>
+    <span class="keyword">LD</span>   <span class="string">L</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   NC, <span class="label">dsx_row_dec</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">H</span>
+    <span class="keyword">ADD</span>  <span class="string">A</span>, <span class="string">$08</span>
+    <span class="keyword">LD</span>   <span class="string">H</span>, <span class="string">A</span>
+
+<span class="label">dsx_row_dec:</span>
+    <span class="keyword">LD</span>   <span class="string">A</span>, <span class="string">(ds_rows)</span>
+    <span class="keyword">DEC</span>  <span class="string">A</span>
+    <span class="keyword">LD</span>   <span class="string">(ds_rows)</span>, <span class="string">A</span>
+    <span class="keyword">JR</span>   NZ, <span class="label">dsx_row_loop</span>
+    <span class="keyword">RET</span></code></pre>
 
 <h2 id="6-clipping">Clipping at Screen Edges</h2>
 
